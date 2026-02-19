@@ -1,0 +1,21 @@
+{
+  "name": "mc-pvp-trainer",
+  "version": "1.0.0",
+  "description": "Minecraft 1.8 PvP AI Training",
+  "main": "src/train.js",
+  "scripts": {
+    "train": "node src/train.js",
+    "play": "node src/play.js",
+    "setup": "chmod +x server/setup.sh && ./server/setup.sh"
+  },
+  "dependencies": {
+    "mineflayer": "^4.11.1",
+    "rcon-client": "^4.2.3",
+    "fs-extra": "^11.1.1",
+    "chalk": "^4.1.2",
+    "minimist": "^1.2.8"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

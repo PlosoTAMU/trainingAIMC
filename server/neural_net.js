@@ -1,0 +1,89 @@
+// src/neural_net.js
+// Simple feedforward NN: inputs → hidden1 → hidden2 → outputs
+// All weights stored in a single Float64Array for easy mutation.
+
+const { NN } = require('../config');
+
+function sigmoid(x) {
+  return 1 / (1 + Math.exp(-x));
+}
+
+function weightCount() {
+  return (
+    NN.INPUTS * NN.HIDDEN1 + NN.HIDDEN1 +           // input → hidden1 + biases
+    NN.HIDDEN1 * NN.HIDDEN2 + NN.HIDDEN2 +          // hidden1 → hidden2 + biases
+    NN.HIDDEN2 * NN.OUTPUTS + NN.OUTPUTS            // hidden2 → outputs + biases
+  );
+}
+
+function randomWeights() {
+  const n = weightCount();
+  const w = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    w[i] = (Math.random() - 0.5) * 2; // range [-1, 1]
+  }
+  return w;
+}
+
+function decide(weights, inputs) {
+  let idx = 0;
+
+  // Layer 1: inputs → hidden1
+  const h1 = new Float64Array(NN.HIDDEN1);
+  for (let i = 0; i < NN.HIDDEN1; i++) {
+    let sum = 0;
+    for (let j = 0; j < NN.INPUTS; j++) {
+      sum += inputs[j] * weights[idx++];
+    }
+    sum += weights[idx++]; // bias
+    h1[i] = sigmoid(sum);
+  }
+
+  // Layer 2: hidden1 → hidden2
+  const h2 = new Float64Array(NN.HIDDEN2);
+  for (let i = 0; i < NN.HIDDEN2; i++) {
+    let sum = 0;
+    for (let j = 0; j < NN.HIDDEN1; j++) {
+      sum += h1[j] * weights[idx++];
+    }
+    sum += weights[idx++]; // bias
+    h2[i] = sigmoid(sum);
+  }
+
+  // Layer 3: hidden2 → outputs
+  const out = new Float64Array(NN.OUTPUTS);
+  for (let i = 0; i < NN.OUTPUTS; i++) {
+    let sum = 0;
+    for (let j = 0; j < NN.HIDDEN2; j++) {
+      sum += h2[j] * weights[idx++];
+    }
+    sum += weights[idx++]; // bias
+    out[i] = sigmoid(sum);
+  }
+
+  // Convert sigmoid outputs [0,1] to boolean actions
+  return [
+    out[0] > 0.5, // forward
+    out[1] > 0.5, // back
+    out[2] > 0.5, // left
+    out[3] > 0.5, // right
+    out[4] > 0.5, // jump
+    out[5] > 0.5, // attack
+  ];
+}
+
+function toJSON(weights) {
+  return Array.from(weights);
+}
+
+function fromJSON(arr) {
+  return new Float64Array(arr);
+}
+
+module.exports = {
+  weightCount,
+  randomWeights,
+  decide,
+  toJSON,
+  fromJSON,
+};
