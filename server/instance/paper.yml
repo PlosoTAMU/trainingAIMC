@@ -1,0 +1,30 @@
+world-settings:
+  default:
+    optimize-explosions: true
+    game-mechanics:
+      disable-chest-cat-detection: true
+      disable-player-crits: false
+      disable-sprint-interruption-on-attack: false
+    max-auto-save-chunks-per-tick: 0
+    prevent-moving-into-unloaded-chunks: false
+    entity-per-chunk-save-limit:
+      experience_orb: 0
+      snowball: 0
+      ender_pearl: 0
+      arrow: 0
+    chunks:
+      auto-save-interval: -1
+settings:
+  async-chunks:
+    enable: true
+    threads: -1
+  chunk-tasks-per-tick: 1000
+  incoming-packet-spam-threshold: 9999
+  save-player-data: false
+  use-alternative-luck-formula: false
+  console:
+    enable-brigadier-highlighting: false
+    enable-brigadier-completions: false
+  watchdog:
+    early-warning-every: -1
+    early-warning-delay: -1
