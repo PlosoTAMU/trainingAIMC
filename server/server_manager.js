@@ -1,6 +1,5 @@
 // src/server_manager.js
-// Owns the single PaperMC server process shared by all training zones.
-// Handles startup, shutdown, RCON, game-rule setup, and zone allocation.
+// Manages single PaperMC server process
 
 const { spawn } = require('child_process');
 const path = require('path');
@@ -15,8 +14,6 @@ class ServerManager {
     port      = cfg.SERVER_PORT,
     rconPort  = cfg.RCON_PORT,
     serverDir = cfg.SERVER_DIR,
-    // Training server: '127.0.0.1' — never exposed to the network.
-    // Play server:    '0.0.0.0'   — reachable from other machines on LAN.
     bindHost  = '127.0.0.1',
   } = {}) {
     this.port      = port;
@@ -29,7 +26,6 @@ class ServerManager {
     this._rconQueue = Promise.resolve();
   }
 
-  // ── Lifecycle ──────────────────────────────────────────────────────────────
   async start() {
     await this._prepareDir();
     await this._spawnProcess();
@@ -54,22 +50,20 @@ class ServerManager {
     }
   }
 
-  // ── RCON (serialised to avoid interleaving) ────────────────────────────────
   rcon(cmd) {
     this._rconQueue = this._rconQueue
       .then(() => this._sendRcon(cmd))
-      .catch(() => {}); // swallow errors silently; RCON blips are non-fatal
+      .catch(() => {});
     return this._rconQueue;
   }
 
-  // Batch: fire all commands without waiting for responses (fast path)
   async rconBatch(cmds) {
     for (const cmd of cmds) {
       this._rconQueue = this._rconQueue
         .then(() => this._sendRcon(cmd))
         .catch(() => {});
     }
-    return this._rconQueue; // await this to know when the batch finished
+    return this._rconQueue;
   }
 
   async _sendRcon(cmd) {
@@ -77,7 +71,6 @@ class ServerManager {
     try {
       return await this.rcon.send(cmd);
     } catch (e) {
-      // RCON occasionally drops; try to reconnect once
       try {
         await this._connectRcon();
         return await this.rcon.send(cmd);
@@ -85,7 +78,6 @@ class ServerManager {
     }
   }
 
-  // ── Server setup ───────────────────────────────────────────────────────────
   async _prepareDir() {
     await fs.ensureDir(this.serverDir);
 
@@ -99,28 +91,25 @@ class ServerManager {
       this._serverProperties());
     await fs.writeFile(path.join(this.serverDir, 'eula.txt'), 'eula=true\n');
 
-    // Write Paper-specific config for maximum performance
     await this._writePaperConfig();
     await this._writeSpigotConfig();
     await this._writeBukkitConfig();
   }
 
   _serverProperties() {
-    const maxPlayers = cfg.TRAINING.PARALLEL_ZONES * 2 + 4; // zones×2 + headroom
+    const maxPlayers = cfg.TRAINING.PARALLEL_ZONES * 2 + 4;
     return [
       `server-port=${this.port}`,
-      // server-ip blank = all interfaces; explicit value locks to one interface.
-      // Training server uses 127.0.0.1 (loopback). Play server uses 0.0.0.0.
       `server-ip=${this.bindHost === '0.0.0.0' ? '' : this.bindHost}`,
       `enable-rcon=true`,
       `rcon.port=${this.rconPort}`,
       `rcon.password=${cfg.RCON_PASSWORD}`,
       `online-mode=false`,
       `max-players=${maxPlayers}`,
-      `view-distance=2`,             // absolute minimum — bots don't need to see far
+      `view-distance=2`,
       `pvp=true`,
-      `difficulty=peaceful`,         // no hostile mobs, no hunger
-      `gamemode=2`,                  // adventure — cannot break/place blocks
+      `difficulty=peaceful`,
+      `gamemode=2`,
       `spawn-npcs=false`,
       `spawn-animals=false`,
       `spawn-monsters=false`,
@@ -132,12 +121,11 @@ class ServerManager {
       `network-compression-threshold=256`,
       `use-native-transport=true`,
       `enable-command-block=true`,
-      `allow-flight=true`,           // bots jump a lot; prevent kick
-      `max-tick-time=-1`,            // disable watchdog — training load is intentional
+      `allow-flight=true`,
+      `max-tick-time=-1`,
     ].join('\n');
   }
 
-  // paper.yml — the big one for performance
   async _writePaperConfig() {
     const config = `
 world-settings:
@@ -145,9 +133,9 @@ world-settings:
     optimize-explosions: true
     game-mechanics:
       disable-chest-cat-detection: true
-      disable-player-crits: false      # crits must work for pvp
+      disable-player-crits: false
       disable-sprint-interruption-on-attack: false
-    max-auto-save-chunks-per-tick: 0   # do NOT save chunks during training
+    max-auto-save-chunks-per-tick: 0
     prevent-moving-into-unloaded-chunks: false
     entity-per-chunk-save-limit:
       experience_orb: 0
@@ -155,14 +143,14 @@ world-settings:
       ender_pearl: 0
       arrow: 0
     chunks:
-      auto-save-interval: -1           # disable chunk auto-save entirely
+      auto-save-interval: -1
 settings:
   async-chunks:
     enable: true
     threads: -1
   chunk-tasks-per-tick: 1000
   incoming-packet-spam-threshold: 9999
-  save-player-data: false              # no disk writes for player data
+  save-player-data: false
   use-alternative-luck-formula: false
   console:
     enable-brigadier-highlighting: false
@@ -179,7 +167,7 @@ settings:
     const config = `
 settings:
   save-user-cache-on-stop-only: true
-  moved-wrongly-threshold: 100.0      # relax anti-cheat; bots move weird
+  moved-wrongly-threshold: 100.0
   moved-too-quickly-multiplier: 100.0
 world-settings:
   default:
@@ -211,7 +199,7 @@ settings:
   allow-end: false
   warn-on-overload: false
   plugin-profiling: false
-  connection-throttle: -1             # don't throttle rapid reconnects
+  connection-throttle: -1
   query.plugins: false
 spawn-limits:
   monsters: 0
@@ -223,7 +211,7 @@ chunk-gc:
 ticks-per:
   animal-spawns: 99999
   monster-spawns: 99999
-  autosave: -1                        # handled per-world above
+  autosave: -1
 `.trimStart();
     await fs.writeFile(path.join(this.serverDir, 'bukkit.yml'), config);
   }
@@ -236,12 +224,23 @@ ticks-per:
     });
 
     this._stdout = '';
-    this.process.stdout.on('data', d => { this._stdout += d.toString(); });
-    this.process.stderr.on('data', () => {}); // suppress
+    this._stderr = '';
+    
+    this.process.stdout.on('data', d => { 
+      this._stdout += d.toString();
+      console.log('[Server]', d.toString().trim());
+    });
+    
+    this.process.stderr.on('data', d => {
+      this._stderr += d.toString();
+      console.error('[Server ERR]', d.toString().trim());
+    });
 
     this.process.on('exit', code => {
       if (this.ready) {
-        console.error(`[Server] Process exited unexpectedly (code ${code})`);
+        console.error(`[Server] Process exited (code ${code})`);
+        console.error('[Server] Last stdout:', this._stdout.slice(-500));
+        console.error('[Server] Last stderr:', this._stderr.slice(-500));
         this.ready = false;
       }
     });
@@ -280,11 +279,10 @@ ticks-per:
   }
 
   async _applyGlobalRules() {
-    // These apply once at server start
     await this.rconBatch([
       'gamerule doDaylightCycle false',
       'gamerule doWeatherCycle false',
-      'gamerule naturalRegeneration false',  // we manage healing manually
+      'gamerule naturalRegeneration false',
       'gamerule doMobSpawning false',
       'gamerule doFireTick false',
       'gamerule keepInventory true',
@@ -292,17 +290,17 @@ ticks-per:
       'gamerule sendCommandFeedback false',
       'gamerule commandBlockOutput false',
       'gamerule mobGriefing false',
-      'gamerule doEntityDrops false',        // no item drops
+      'gamerule doEntityDrops false',
       'gamerule showDeathMessages false',
       'time set 6000',
     ]);
   }
 
-  // ── Zone coordinate helpers (static) ──────────────────────────────────────
   static zoneSpawnA(zoneId) {
     const ox = zoneId * cfg.ZONE.SPACING;
     return { x: ox + 0.5, y: cfg.ZONE.FLOOR_Y, z: 0.5, yaw: 90 };
   }
+  
   static zoneSpawnB(zoneId) {
     const ox = zoneId * cfg.ZONE.SPACING;
     return { x: ox + cfg.ZONE.FIGHTER_SEP + 0.5, y: cfg.ZONE.FLOOR_Y, z: 0.5, yaw: 270 };

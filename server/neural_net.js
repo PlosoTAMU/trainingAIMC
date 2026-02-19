@@ -1,6 +1,5 @@
 // src/neural_net.js
 // Simple feedforward NN: inputs → hidden1 → hidden2 → outputs
-// All weights stored in a single Float64Array for easy mutation.
 
 const { NN } = require('../config');
 
@@ -10,9 +9,9 @@ function sigmoid(x) {
 
 function weightCount() {
   return (
-    NN.INPUTS * NN.HIDDEN1 + NN.HIDDEN1 +           // input → hidden1 + biases
-    NN.HIDDEN1 * NN.HIDDEN2 + NN.HIDDEN2 +          // hidden1 → hidden2 + biases
-    NN.HIDDEN2 * NN.OUTPUTS + NN.OUTPUTS            // hidden2 → outputs + biases
+    NN.INPUTS * NN.HIDDEN1 + NN.HIDDEN1 +
+    NN.HIDDEN1 * NN.HIDDEN2 + NN.HIDDEN2 +
+    NN.HIDDEN2 * NN.OUTPUTS + NN.OUTPUTS
   );
 }
 
@@ -20,7 +19,7 @@ function randomWeights() {
   const n = weightCount();
   const w = new Float64Array(n);
   for (let i = 0; i < n; i++) {
-    w[i] = (Math.random() - 0.5) * 2; // range [-1, 1]
+    w[i] = (Math.random() - 0.5) * 2;
   }
   return w;
 }
@@ -35,7 +34,7 @@ function decide(weights, inputs) {
     for (let j = 0; j < NN.INPUTS; j++) {
       sum += inputs[j] * weights[idx++];
     }
-    sum += weights[idx++]; // bias
+    sum += weights[idx++];
     h1[i] = sigmoid(sum);
   }
 
@@ -46,7 +45,7 @@ function decide(weights, inputs) {
     for (let j = 0; j < NN.HIDDEN1; j++) {
       sum += h1[j] * weights[idx++];
     }
-    sum += weights[idx++]; // bias
+    sum += weights[idx++];
     h2[i] = sigmoid(sum);
   }
 
@@ -57,11 +56,10 @@ function decide(weights, inputs) {
     for (let j = 0; j < NN.HIDDEN2; j++) {
       sum += h2[j] * weights[idx++];
     }
-    sum += weights[idx++]; // bias
+    sum += weights[idx++];
     out[i] = sigmoid(sum);
   }
 
-  // Convert sigmoid outputs [0,1] to boolean actions
   return [
     out[0] > 0.5, // forward
     out[1] > 0.5, // back

@@ -17,7 +17,6 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function main() {
   console.log(chalk.bold.cyan('\n⚔  MC 1.8 PvP AI Trainer  ⚔\n'));
 
-  // Start server
   const server = new ServerManager();
   console.log(chalk.gray('Starting training server...'));
   await server.start();
@@ -25,7 +24,6 @@ async function main() {
   let generation = 0;
   let population = [];
 
-  // Initialize or resume
   if (args.resume) {
     const latest = await findLatestWeights();
     if (latest) {
@@ -43,15 +41,12 @@ async function main() {
     }
   }
 
-  // Training loop
   while (true) {
     generation++;
     console.log(chalk.bold.magenta(`\n═══ Generation ${generation} ═══\n`));
 
-    // Evaluate population
     const scores = await evaluatePopulation(server, population);
 
-    // Sort by fitness
     const ranked = population.map((w, i) => ({ weights: w, score: scores[i] }))
       .sort((a, b) => b.score - a.score);
 
@@ -60,12 +55,10 @@ async function main() {
 
     console.log(chalk.green(`Best: ${bestScore.toFixed(1)}  Avg: ${avgScore.toFixed(1)}`));
 
-    // Save
     if (generation % TRAINING.SAVE_EVERY_N_GENS === 0) {
       await saveGeneration(generation, ranked, bestScore);
     }
 
-    // Evolve
     population = evolve(ranked);
   }
 }
@@ -116,7 +109,6 @@ async function runFight(server, zoneId, weightsA, weightsB, idxA, idxB) {
     }),
   ]);
 
-  // Teleport and setup
   await server.rconBatch([
     `tp ${botA.bot.username} ${spawnA.x} ${spawnA.y} ${spawnA.z}`,
     `tp ${botB.bot.username} ${spawnB.x} ${spawnB.y} ${spawnB.z}`,
@@ -133,7 +125,6 @@ async function runFight(server, zoneId, weightsA, weightsB, idxA, idxB) {
   botA.startFighting();
   botB.startFighting();
 
-  // Wait for fight to complete
   await sleep(BOXING.HIT_TIMEOUT_MS);
 
   const hitsA = botA.getHits().myHits;
@@ -155,12 +146,10 @@ function evolve(ranked) {
   const elite = ranked.slice(0, topN);
   const newPop = [];
 
-  // Keep elite
   for (const { weights } of elite) {
     newPop.push(new Float64Array(weights));
   }
 
-  // Fill rest with mutated copies
   while (newPop.length < TRAINING.POP_SIZE) {
     const parent = elite[Math.floor(Math.random() * elite.length)].weights;
     newPop.push(mutate(parent));
@@ -193,7 +182,6 @@ async function saveGeneration(gen, ranked, bestScore) {
     { spaces: 2 }
   );
 
-  // Save champion
   await fs.writeJSON(
     path.join(cfg.TRAINING.WEIGHTS_DIR, 'champion.json'),
     {
