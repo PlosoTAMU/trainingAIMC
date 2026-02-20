@@ -62,8 +62,6 @@ async function main() {
     population = evolve(ranked);
   }
 }
-// Add at top with other imports
-const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // Global connection queue - only allow ONE bot to connect at a time
 let isConnecting = false;
