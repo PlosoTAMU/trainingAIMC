@@ -3,7 +3,7 @@
 module.exports = {
   // ── Minecraft server ───────────────────────────────────────────────────────
   MC_VERSION: '1.8.8',
-  SERVER_JAR: './server/spigot-1.8.8.jar',
+  SERVER_JAR: './server/paper-1.8.8.jar',
   SERVER_DIR: './server/instance',
   SERVER_PORT: 25570,
   PLAY_SERVER_PORT: 25565,

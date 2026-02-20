@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# server/setup.sh — downloads Spigot 1.8.8, installs deps, verifies Java
+# server/setup.sh — downloads PaperMC 1.8.8, installs deps, verifies Java
 
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-JAR_PATH="$SCRIPT_DIR/spigot-1.8.8.jar"
+JAR_PATH="$SCRIPT_DIR/paper-1.8.8.jar"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo " MC 1.8 PvP Boxing Trainer — Setup (Debian)"
@@ -114,28 +114,30 @@ fi
 
 echo "  Node v$NODE_VER  ✓"
 
-# ── Spigot 1.8.8 (1.8.9 clients work) ───────────────────────────────────────
+# ── PaperMC 1.8.8 (1.8.9 clients work) ────────────────────────────────────
 echo ""
 if [ -f "$JAR_PATH" ]; then
   echo "Server jar already exists  ✓"
 else
-  echo "Downloading Spigot 1.8.8..."
+  echo "Downloading PaperMC 1.8.8..."
   
-  URL="https://cdn.getbukkit.org/spigot/spigot-1.8.8-R0.1-SNAPSHOT-latest.jar"
+  # Attempt to download Paper via papermc.io API. If this fails, place a
+  # compatible paper-1.8.8 jar into this directory manually.
+  URL="https://papermc.io/api/v2/projects/paper/versions/1.8.8/builds/latest/downloads/paper-1.8.8.jar"
   
   if command -v curl &> /dev/null; then
     curl -L -o "$JAR_PATH" "$URL" --progress-bar || {
-      echo "ERROR: Download failed. Check internet connection."
+      echo "ERROR: Download failed. Please download paper-1.8.8.jar manually and place it at $JAR_PATH"
       exit 1
     }
   elif command -v wget &> /dev/null; then
     wget -O "$JAR_PATH" "$URL" || {
-      echo "ERROR: Download failed."
+      echo "ERROR: Download failed. Please download paper-1.8.8.jar manually and place it at $JAR_PATH"
       exit 1
     }
   fi
   
-  echo "  Downloaded Spigot 1.8.8  ✓"
+  echo "  Downloaded PaperMC 1.8.8  ✓"
   echo "  (1.8.9 clients can connect)"
 fi
 

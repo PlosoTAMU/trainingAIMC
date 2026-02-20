@@ -178,6 +178,12 @@ class ServerManager {
       path.join(this.serverDir, 'spigot.yml'),
       this._buildSpigotYml(),
     );
+    // Paper also respects paper.yml; write a minimal paper.yml to avoid
+    // Paper regenerating its defaults and to keep behaviour predictable.
+    await fs.writeFile(
+      path.join(this.serverDir, 'paper.yml'),
+      this._buildPaperYml(),
+    );
     await fs.writeFile(
       path.join(this.serverDir, 'bukkit.yml'),
       this._buildBukkitYml(),
@@ -223,8 +229,8 @@ class ServerManager {
   }
 
   _buildSpigotYml() {
-    // Full spigot.yml matching what Spigot 1.8.8 expects.
-    // config-version must match so Spigot does not regenerate.
+    // Full spigot.yml matching what Spigot 1.8.8 / Paper 1.8 expects.
+    // config-version must match so the server does not regenerate.
     // Key values: connection-throttle:-1, restart-on-crash:false,
     // timeout-time:300, max-tick-time both -1.
     // moved-wrongly/too-quickly thresholds: relaxed for play server so a real
@@ -332,6 +338,18 @@ world-settings:
       swim-multiplier: 0.0
       sprint-multiplier: 0.0
       other-multiplier: 0.0
+`;
+  }
+
+  _buildPaperYml() {
+    // Minimal paper.yml for PaperMC compatibility. This avoids Paper
+    // regenerating a default file and gives us a place for paper-specific
+    // overrides if needed later.
+    return `# paper.yml (minimal)
+settings:
+  use-alternate-lag-compensator: false
+  save-user-cache-on-stop-only: true
+  restart-on-crash: false
 `;
   }
 
