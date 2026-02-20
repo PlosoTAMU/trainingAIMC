@@ -1,0 +1,101 @@
+config-version: 8
+settings:
+  debug: false
+  save-user-cache-on-stop-only: true
+  moved-wrongly-threshold: 100.0
+  moved-too-quickly-threshold: 100.0
+  moved-too-quickly-multiplier: 100.0
+  bungeecord: false
+  late-bind: false
+  sample-count: 12
+  player-shuffle: 0
+  filter-creative-items: true
+  user-cache-size: 1000
+  int-cache-limit: 1024
+  timeout-time: 300
+  restart-on-crash: false
+  restart-script: ./start.sh
+  netty-threads: 2
+  connection-throttle: -1
+  attribute:
+    maxHealth:
+      max: 2048.0
+    movementSpeed:
+      max: 2048.0
+    attackDamage:
+      max: 2048.0
+commands:
+  tab-complete: 0
+  spam-exclusions:
+    - /skill
+  replace-commands:
+    - setblock
+    - summon
+    - testforblock
+    - tellraw
+  log: true
+  silent-commandblock-console: false
+  send-namespaced: true
+messages:
+  whitelist: You are not whitelisted on this server!
+  unknown-command: Unknown command. Type "/help" for help.
+  server-full: The server is full!
+  outdated-client: Outdated client! Please use {0}
+  outdated-server: Outdated server! I'm still on {0}
+  restart: Server restarting
+world-settings:
+  default:
+    verbose: false
+    mob-spawn-range: 4
+    anti-xray:
+      enabled: false
+    entity-activation-range:
+      animals: 0
+      monsters: 0
+      misc: 0
+    entity-tracking-range:
+      players: 48
+      animals: 0
+      monsters: 0
+      misc: 0
+      other: 0
+    tick-inactive-villagers: false
+    merge-radius:
+      exp: 10.0
+      item: 10.0
+    chunks-per-tick: 650
+    clear-tick-list: false
+    item-despawn-rate: 6000
+    view-distance: 2
+    arrow-despawn-rate: 1200
+    wither-spawn-sound-radius: 0
+    hanging-tick-frequency: 100
+    zombie-aggressive-towards-villager: false
+    nerf-spawner-mobs: false
+    enable-zombie-pigmen-portal-spawns: false
+    squid-spawn-range:
+      min: 45.0
+    growth:
+      cactus-modifier: 100
+      cane-modifier: 100
+      melon-modifier: 100
+      mushroom-modifier: 100
+      pumpkin-modifier: 100
+      sapling-modifier: 100
+      wheat-modifier: 100
+      netherwart-modifier: 100
+    max-tick-time:
+      tile: -1
+      entity: -1
+    max-entity-collisions: 1
+    dragon-death-sound-radius: 0
+    seed-village: 10387312
+    seed-feature: 14357617
+    hunger:
+      jump-walk-exhaustion: 0.0
+      jump-sprint-exhaustion: 0.0
+      combat-exhaustion: 0.0
+      regen-exhaustion: 0.0
+      swim-multiplier: 0.0
+      sprint-multiplier: 0.0
+      other-multiplier: 0.0
