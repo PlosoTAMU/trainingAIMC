@@ -149,7 +149,7 @@ class ServerManager {
     } else {
       // For the training server, delete the world only once if it was generated
       // with the old broken generator-settings (sentinel file tracks this).
-      const sentinel = path.join(this.serverDir, '.world_gen_v4');
+      const sentinel = path.join(this.serverDir, '.world_gen_v5');
       if (!await fs.pathExists(sentinel)) {
         for (const worldDir of ['world', 'world_nether', 'world_the_end']) {
           const p = path.join(this.serverDir, worldDir);
@@ -158,8 +158,8 @@ class ServerManager {
             log.step('Server', `deleted old-generator world: ${worldDir}`);
           }
         }
-        await fs.writeFile(sentinel, 'generator=3;7,2x3,2;1;\n');
-        log.step('Server', 'wrote world gen sentinel');
+        await fs.writeFile(sentinel, 'flat-default-no-generator-settings\n');
+        log.step('Server', 'wrote world gen sentinel v5');
       }
     }
   }
@@ -206,7 +206,7 @@ class ServerManager {
       `spawn-monsters=false`,
       `generate-structures=false`,
       `level-type=FLAT`,
-      `generator-settings=3;7,2x3,2;1;`,
+      `generator-settings=`,
       `level-name=world`,
       `motd=PvP Training Server`,
       `network-compression-threshold=${this._isPlayServer ? 256 : -1}`,
@@ -513,6 +513,37 @@ aliases: now-in-commands.yml
       // not at default 0,64,0 in what may be void or far away.
       `setworldspawn 0 ${cfg.ZONE.FLOOR_Y} 0`,
     ]);
+
+    // Safety net: build a stone platform at the fight area for zone 0.
+    // This guarantees a solid surface even if generator-settings was wrong.
+    // For training, zone 0 is always used (PARALLEL_ZONES=1); play only
+    // uses zone 0 as well.
+    await this._buildFloor(0);
+  }
+
+  /**
+   * Build a stone platform for the given zone.
+   * The floor is placed one block below FLOOR_Y (the Y players stand on).
+   * Platform stretches from (ox - 5) to (ox + FIGHTER_SEP + 5) in X,
+   * and -5 to +5 in Z — plenty of room for two fighters.
+   */
+  async _buildFloor(zoneId) {
+    const ox = zoneId * cfg.ZONE.SPACING;
+    const floorBlock = cfg.ZONE.FLOOR_Y - 1;   // block the players stand ON
+    const x1 = ox - 5;
+    const x2 = ox + cfg.ZONE.FIGHTER_SEP + 5;
+    const z1 = -5;
+    const z2 = 5;
+    // /fill can only do 32768 blocks per call, our platform is at most
+    // ~21 × 11 × 1 = 231 blocks — well within the limit.
+    await this.sendCommand(
+      `fill ${x1} ${floorBlock} ${z1} ${x2} ${floorBlock} ${z2} minecraft:stone`,
+    );
+    // Also place bedrock one layer below for good measure
+    await this.sendCommand(
+      `fill ${x1} ${floorBlock - 1} ${z1} ${x2} ${floorBlock - 1} ${z2} minecraft:bedrock`,
+    );
+    log.step('Server', `built floor for zone ${zoneId} at y=${floorBlock}`);
   }
 
   static zoneSpawnA(zoneId) {
