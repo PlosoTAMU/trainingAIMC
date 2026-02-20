@@ -42,7 +42,7 @@ module.exports = {
 
   BOXING: {
     HITS_TO_WIN: 100,
-    HIT_TIMEOUT_MS: 60_000,
+    HIT_TIMEOUT_MS: 10_000,
     HEAL_ON_HIT: true,
     HEAL_DELAY_MS: 50,
   },
@@ -54,8 +54,8 @@ module.exports = {
 
   TRAINING: {
     PARALLEL_ZONES: 1,
-    POP_SIZE: 6,
-    FIGHTS_PER_AGENT: 2,
+    POP_SIZE: 4,
+    FIGHTS_PER_AGENT: 1,
     TOP_FRACTION: 0.28,
     MUTATION_RATE: 0.06,
     MUTATION_STRENGTH: 0.20,

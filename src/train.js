@@ -14,6 +14,23 @@ const nn = require('./neural_net');
 const { TRAINING, BOXING } = cfg;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// Global connection semaphore - only ONE bot can be connecting at any time
+let isConnecting = false;
+let connectionCount = 0;
+
+async function acquireConnectionLock() {
+  while (isConnecting) {
+    await sleep(200);
+  }
+  isConnecting = true;
+  connectionCount++;
+  console.log(`  [Connection ${connectionCount}] Acquiring lock...`);
+}
+
+function releaseConnectionLock() {
+  isConnecting = false;
+  console.log(`  [Connection ${connectionCount}] Released.`);
+}
 async function main() {
   console.log(chalk.bold.cyan('\n⚔  MC 1.8 PvP AI Trainer  ⚔\n'));
 
@@ -63,17 +80,6 @@ async function main() {
   }
 }
 
-// Global connection queue - only allow ONE bot to connect at a time
-let isConnecting = false;
-async function waitForConnectionSlot() {
-  while (isConnecting) {
-    await sleep(100);
-  }
-  isConnecting = true;
-}
-function releaseConnectionSlot() {
-  isConnecting = false;
-}
 
 async function evaluatePopulation(server, population) {
   const scores = new Array(population.length).fill(0);
@@ -107,9 +113,10 @@ async function runFight(server, zoneId, weightsA, weightsB, idxA, idxB) {
   let botA, botB;
   
   try {
-    // Connect Bot A with exclusive lock
-    await waitForConnectionSlot();
-    await sleep(2000); // 2 second delay before each connection
+    // Bot A - acquire lock, wait 3 seconds, connect
+    await acquireConnectionLock();
+    console.log(`    Connecting Bot A${idxA}...`);
+    await sleep(3000); // 3 second delay before connection
     
     botA = await createBot({
       host: '127.0.0.1',
@@ -119,13 +126,15 @@ async function runFight(server, zoneId, weightsA, weightsB, idxA, idxB) {
       zoneOriginX: 0,
     });
     
-    releaseConnectionSlot();
+    releaseConnectionLock();
+    console.log(`    Bot A${idxA} connected ✓`);
     
-    await sleep(1000); // Wait between bot connections
+    await sleep(2000); // Wait 2 seconds between bot connections
     
-    // Connect Bot B with exclusive lock
-    await waitForConnectionSlot();
-    await sleep(2000);
+    // Bot B - acquire lock, wait 3 seconds, connect
+    await acquireConnectionLock();
+    console.log(`    Connecting Bot B${idxB}...`);
+    await sleep(3000);
     
     botB = await createBot({
       host: '127.0.0.1',
@@ -135,11 +144,13 @@ async function runFight(server, zoneId, weightsA, weightsB, idxA, idxB) {
       zoneOriginX: 0,
     });
     
-    releaseConnectionSlot();
+    releaseConnectionLock();
+    console.log(`    Bot B${idxB} connected ✓`);
     
-    await sleep(500); // Let both bots fully initialize
+    await sleep(1000); // Let both bots fully spawn
     
     // Setup fight
+    console.log(`    Setting up arena...`);
     await server.rconBatch([
       `tp ${botA.bot.username} ${spawnA.x} ${spawnA.y} ${spawnA.z}`,
       `tp ${botB.bot.username} ${spawnB.x} ${spawnB.y} ${spawnB.z}`,
@@ -153,14 +164,17 @@ async function runFight(server, zoneId, weightsA, weightsB, idxA, idxB) {
       `gamemode 2 ${botB.bot.username}`,
     ]);
 
+    console.log(`    Fight starting: A${idxA} vs B${idxB}`);
     botA.startFighting();
     botB.startFighting();
 
-    // Shorter fight duration for testing
-    await sleep(15000); // 15 seconds instead of 60
+    // Shorter fight for testing
+    await sleep(10000); // 10 seconds
 
     const hitsA = botA.getHits().myHits;
     const hitsB = botB.getHits().myHits;
+    
+    console.log(`    Fight complete: A${idxA}=${hitsA} hits, B${idxB}=${hitsB} hits`);
 
     return {
       idx: idxA,
@@ -170,7 +184,7 @@ async function runFight(server, zoneId, weightsA, weightsB, idxA, idxB) {
     };
     
   } catch (error) {
-    console.error(chalk.red(`\n  Fight ${idxA} vs ${idxB} failed: ${error.message}`));
+    console.error(`    Fight ${idxA} vs ${idxB} FAILED: ${error.message}`);
     return {
       idx: idxA,
       oppIdx: idxB,
@@ -178,14 +192,24 @@ async function runFight(server, zoneId, weightsA, weightsB, idxA, idxB) {
       oppScore: 0,
     };
   } finally {
-    // Always cleanup
+    // Cleanup
+    console.log(`    Disconnecting bots...`);
     if (botA) {
-      try { botA.disconnect(); } catch {}
+      try { 
+        botA.stopFighting();
+        botA.disconnect(); 
+      } catch {}
     }
     if (botB) {
-      try { botB.disconnect(); } catch {}
+      try { 
+        botB.stopFighting();
+        botB.disconnect(); 
+      } catch {}
     }
-    await sleep(1000); // Wait before next fight
+    
+    // Critical: wait before allowing next connection
+    await sleep(3000);
+    console.log(`    Cooldown complete.\n`);
   }
 }
 
