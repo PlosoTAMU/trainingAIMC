@@ -59,14 +59,29 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
       username,
       version: '1.8.9',
       auth: 'offline',
-      checkTimeoutInterval: 10000,
+      checkTimeoutInterval: 120000,
       hideErrors: false,
+      physicsEnabled: true,
+      maxConcurrentTasks: 1,
     });
 
-    // ADD THIS - better error logging
+    // Timeout for initial connection
+    const connectionTimeout = setTimeout(() => {
+      bot.end();
+      reject(new Error(`${username}: Connection timeout after 30s`));
+    }, 30000);
+
     bot.on('error', err => {
-      console.error(`[Bot ${username}] Error:`, err.message);
+      clearTimeout(connectionTimeout);
+      console.error(`[${username}] Error:`, err.message);
       reject(err);
+    });
+
+    bot.once('spawn', () => {
+      clearTimeout(connectionTimeout);
+      bot.removeListener('error', reject);
+      lastHp = bot.health;
+      resolve(controller);
     });
 
     const ping = randomPing();

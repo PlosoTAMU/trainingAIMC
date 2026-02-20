@@ -62,29 +62,43 @@ async function main() {
     population = evolve(ranked);
   }
 }
+// Add at top with other imports
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// Global connection queue - only allow ONE bot to connect at a time
+let isConnecting = false;
+async function waitForConnectionSlot() {
+  while (isConnecting) {
+    await sleep(100);
+  }
+  isConnecting = true;
+}
+function releaseConnectionSlot() {
+  isConnecting = false;
+}
 
 async function evaluatePopulation(server, population) {
   const scores = new Array(population.length).fill(0);
-  const zones = TRAINING.PARALLEL_ZONES;
-
-  for (let round = 0; round < Math.ceil(TRAINING.FIGHTS_PER_AGENT / zones); round++) {
-    const fights = [];
-
-    for (let z = 0; z < zones && fights.length < population.length; z++) {
-      const idx = (round * zones + z) % population.length;
-      const oppIdx = (idx + 1) % population.length;
-
-      fights.push(runFight(server, z, population[idx], population[oppIdx], idx, oppIdx));
-    }
-
-    const results = await Promise.all(fights);
-
-    for (const { idx, oppIdx, score, oppScore } of results) {
-      scores[idx] += score;
-      scores[oppIdx] += oppScore;
+  
+  // Run fights ONE AT A TIME instead of in parallel
+  console.log(chalk.gray(`  Running ${population.length} fights sequentially...`));
+  
+  for (let i = 0; i < population.length; i++) {
+    const idx = i;
+    const oppIdx = (i + 1) % population.length;
+    
+    const result = await runFight(server, 0, population[idx], population[oppIdx], idx, oppIdx);
+    
+    scores[result.idx] += result.score;
+    scores[result.oppIdx] += result.oppScore;
+    
+    // Progress indicator
+    if ((i + 1) % 5 === 0) {
+      process.stdout.write(chalk.gray(`\r  Progress: ${i + 1}/${population.length} fights`));
     }
   }
-
+  console.log(''); // newline
+  
   return scores;
 }
 
@@ -92,54 +106,89 @@ async function runFight(server, zoneId, weightsA, weightsB, idxA, idxB) {
   const spawnA = ServerManager.zoneSpawnA(zoneId);
   const spawnB = ServerManager.zoneSpawnB(zoneId);
 
-  const botA = await createBot({
-    host: '127.0.0.1',
-    port: cfg.SERVER_PORT,
-    username: `A${idxA}_Z${zoneId}`,
-    weights: weightsA,
-    zoneOriginX: zoneId * cfg.ZONE.SPACING,
-  });
+  let botA, botB;
+  
+  try {
+    // Connect Bot A with exclusive lock
+    await waitForConnectionSlot();
+    await sleep(2000); // 2 second delay before each connection
+    
+    botA = await createBot({
+      host: '127.0.0.1',
+      port: cfg.SERVER_PORT,
+      username: `A${idxA}`,
+      weights: weightsA,
+      zoneOriginX: 0,
+    });
+    
+    releaseConnectionSlot();
+    
+    await sleep(1000); // Wait between bot connections
+    
+    // Connect Bot B with exclusive lock
+    await waitForConnectionSlot();
+    await sleep(2000);
+    
+    botB = await createBot({
+      host: '127.0.0.1',
+      port: cfg.SERVER_PORT,
+      username: `B${idxB}`,
+      weights: weightsB,
+      zoneOriginX: 0,
+    });
+    
+    releaseConnectionSlot();
+    
+    await sleep(500); // Let both bots fully initialize
+    
+    // Setup fight
+    await server.rconBatch([
+      `tp ${botA.bot.username} ${spawnA.x} ${spawnA.y} ${spawnA.z}`,
+      `tp ${botB.bot.username} ${spawnB.x} ${spawnB.y} ${spawnB.z}`,
+      `clear ${botA.bot.username}`,
+      `clear ${botB.bot.username}`,
+      `give ${botA.bot.username} diamond_sword 1 0 {Unbreakable:1}`,
+      `give ${botB.bot.username} diamond_sword 1 0 {Unbreakable:1}`,
+      `effect ${botA.bot.username} instant_health 1 255 true`,
+      `effect ${botB.bot.username} instant_health 1 255 true`,
+      `gamemode 2 ${botA.bot.username}`,
+      `gamemode 2 ${botB.bot.username}`,
+    ]);
 
-  await sleep(500);  // ADD THIS LINE - 500ms delay between bots
+    botA.startFighting();
+    botB.startFighting();
 
-  const botB = await createBot({
-    host: '127.0.0.1',
-    port: cfg.SERVER_PORT,
-    username: `B${idxB}_Z${zoneId}`,
-    weights: weightsB,
-    zoneOriginX: zoneId * cfg.ZONE.SPACING,
-  });
+    // Shorter fight duration for testing
+    await sleep(15000); // 15 seconds instead of 60
 
-  await server.rconBatch([
-    `tp ${botA.bot.username} ${spawnA.x} ${spawnA.y} ${spawnA.z}`,
-    `tp ${botB.bot.username} ${spawnB.x} ${spawnB.y} ${spawnB.z}`,
-    `clear ${botA.bot.username}`,
-    `clear ${botB.bot.username}`,
-    `give ${botA.bot.username} diamond_sword 1 0 {Unbreakable:1}`,
-    `give ${botB.bot.username} diamond_sword 1 0 {Unbreakable:1}`,
-    `effect ${botA.bot.username} instant_health 1 255 true`,
-    `effect ${botB.bot.username} instant_health 1 255 true`,
-    `gamemode 2 ${botA.bot.username}`,
-    `gamemode 2 ${botB.bot.username}`,
-  ]);
+    const hitsA = botA.getHits().myHits;
+    const hitsB = botB.getHits().myHits;
 
-  botA.startFighting();
-  botB.startFighting();
-
-  await sleep(BOXING.HIT_TIMEOUT_MS);
-
-  const hitsA = botA.getHits().myHits;
-  const hitsB = botB.getHits().myHits;
-
-  botA.disconnect();
-  botB.disconnect();
-
-  return {
-    idx: idxA,
-    oppIdx: idxB,
-    score: hitsA,
-    oppScore: hitsB,
-  };
+    return {
+      idx: idxA,
+      oppIdx: idxB,
+      score: hitsA,
+      oppScore: hitsB,
+    };
+    
+  } catch (error) {
+    console.error(chalk.red(`\n  Fight ${idxA} vs ${idxB} failed: ${error.message}`));
+    return {
+      idx: idxA,
+      oppIdx: idxB,
+      score: 0,
+      oppScore: 0,
+    };
+  } finally {
+    // Always cleanup
+    if (botA) {
+      try { botA.disconnect(); } catch {}
+    }
+    if (botB) {
+      try { botB.disconnect(); } catch {}
+    }
+    await sleep(1000); // Wait before next fight
+  }
 }
 
 function evolve(ranked) {

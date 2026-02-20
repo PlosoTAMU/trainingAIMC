@@ -53,9 +53,9 @@ module.exports = {
   },
 
   TRAINING: {
-    PARALLEL_ZONES: 4,
-    POP_SIZE: 32,
-    FIGHTS_PER_AGENT: 5,
+    PARALLEL_ZONES: 1,
+    POP_SIZE: 6,
+    FIGHTS_PER_AGENT: 2,
     TOP_FRACTION: 0.28,
     MUTATION_RATE: 0.06,
     MUTATION_STRENGTH: 0.20,
