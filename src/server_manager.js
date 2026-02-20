@@ -88,7 +88,7 @@ class ServerManager {
 
   async _sendRcon(cmd) {
     if (!this._rconClient) {
-      log.warn('RCON', `_sendRcon("${cmd}") — no client, reconnecting`);
+      log.step('RCON', `_sendRcon("${cmd}") — no client, reconnecting`);
       try { await this._connectRcon(); } catch (e) {
         log.error('RCON', `reconnect failed before "${cmd}"`, e);
         return;
@@ -248,7 +248,7 @@ ticks-per:
         this._stderr = this._stderr.slice(-MAX_LOG_LENGTH);
       }
       const trimmed = chunk.trim();
-      if (trimmed) log.warn('MC-ERR', trimmed);
+      if (trimmed) log.step('MC-ERR', trimmed);
     });
 
     this.process.on('exit', code => {
@@ -321,7 +321,7 @@ ticks-per:
           });
 
           rcon.on('end', () => {
-            log.warn('RCON', 'connection ended — will reconnect on next command');
+            log.step('RCON', 'connection ended — will reconnect on next command');
             // Mark client as gone so _sendRcon knows to reconnect
             if (this._rconClient === rcon) {
               this._rconClient = null;

@@ -1,5 +1,14 @@
 // src/logger.js
 // Centralised timestamped logger with stack traces for deep error diagnosis.
+//
+// Console output policy:
+//   info()  → console (always visible)
+//   warn()  → console (always visible)
+//   error() → console, but RATE-LIMITED: same tag+code combo prints at most
+//             once per ERROR_THROTTLE_MS to prevent spam; full details always
+//             written to the log file regardless.
+//   step()  → FILE ONLY (breadcrumb detail, not needed in terminal)
+//   MC server stdout/stderr → FILE ONLY (too noisy for terminal)
 
 const chalk = require('chalk');
 const fs = require('fs');
@@ -14,35 +23,36 @@ try { fs.mkdirSync(LOG_DIR, { recursive: true }); } catch {}
 
 const logStream = fs.createWriteStream(LOG_FILE, { flags: 'a' });
 
+// ── Rate-limit state for error console output ─────────────────────────────
+const ERROR_THROTTLE_MS = 1000;   // max one console print per tag+code per second
+const _errorLastPrinted = new Map(); // key → timestamp
+
 function ts() {
   return new Date().toISOString();
 }
 
-/** Write one line to the file AND to the console (colour-stripped for file). */
-function write(level, tag, msg, extra) {
+function writeFile(level, tag, msg, extra) {
   const line = `[${ts()}] [${level}] [${tag}] ${msg}`;
-  // File: plain text
   logStream.write(line + (extra ? '\n' + extra : '') + '\n');
-  return line;
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────
 
 function info(tag, msg) {
   console.log(chalk.cyan(`[${tag}]`) + ' ' + msg);
-  write('INFO ', tag, msg);
+  writeFile('INFO ', tag, msg);
 }
 
 function warn(tag, msg) {
   console.log(chalk.yellow(`[${tag}] ⚠ ${msg}`));
-  write('WARN ', tag, msg);
+  writeFile('WARN ', tag, msg);
 }
 
 /**
  * Log an error with full stack trace.
- * @param {string}        tag   - e.g. 'BOT:A1', 'RCON', 'FIGHT:3'
- * @param {string}        msg   - human readable context
- * @param {Error|unknown} err   - the error object
+ * Console output is throttled per (tag + error code) so a repeating error
+ * only prints once per second instead of flooding the terminal.
+ * The log FILE always receives every occurrence.
  */
 function error(tag, msg, err) {
   const errMsg  = err instanceof Error ? err.message : String(err);
@@ -51,21 +61,28 @@ function error(tag, msg, err) {
   const syscall = err && err.syscall ? ` [syscall=${err.syscall}]` : '';
   const address = err && err.address ? ` [addr=${err.address}:${err.port || '?'}]` : '';
 
-  const header = chalk.red(`[${tag}] ✖ ${msg}: ${errMsg}${code}${syscall}${address}`);
-  console.error(header);
-  console.error(chalk.gray(stack));
+  // Always write full detail to file
+  writeFile('ERROR', tag, `${msg}: ${errMsg}${code}${syscall}${address}`, stack);
 
-  write('ERROR', tag, `${msg}: ${errMsg}${code}${syscall}${address}`, stack);
+  // Rate-limit console output
+  const throttleKey = `${tag}::${err && err.code ? err.code : errMsg.slice(0, 40)}`;
+  const now = Date.now();
+  const lastPrinted = _errorLastPrinted.get(throttleKey) || 0;
+
+  if (now - lastPrinted >= ERROR_THROTTLE_MS) {
+    _errorLastPrinted.set(throttleKey, now);
+    console.error(chalk.red(`[${tag}] ✖ ${msg}: ${errMsg}${code}${syscall}${address}`));
+    console.error(chalk.gray(stack));
+    console.error(chalk.gray(`  (further identical errors suppressed for ${ERROR_THROTTLE_MS}ms — see logs/debug.log)`));
+  }
 }
 
 /**
- * Log a "step" — a named checkpoint so we can trace exactly how far the
- * fight lifecycle got before an error.
+ * Breadcrumb step — written to the log file ONLY, not the console.
+ * Use this for high-frequency lifecycle checkpoints.
  */
 function step(tag, msg) {
-  const out = chalk.gray(`  ↳ [${tag}] ${msg}`);
-  console.log(out);
-  write('STEP ', tag, msg);
+  writeFile('STEP ', tag, msg);
 }
 
 module.exports = { info, warn, error, step, LOG_FILE };
