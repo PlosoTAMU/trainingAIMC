@@ -98,6 +98,17 @@ async function main() {
           console.log(chalk.green(`\n[Match] ${humanName} connected — spawning AI...`));
           humanHits = 0;
           aiHits = 0;
+
+          // Put the human in survival and teleport them to zone A spawn.
+          const sp = ServerManager.zoneSpawnA(PLAYER_ZONE);
+          await server.rconBatch([
+            `gamemode 0 ${humanName}`,
+            `tp ${humanName} ${sp.x} ${sp.y} ${sp.z} ${sp.yaw} 0`,
+            `clear ${humanName}`,
+            `give ${humanName} minecraft:diamond_sword 1 0 {Unbreakable:1}`,
+            `effect ${humanName} minecraft:instant_health 1 255 true`,
+          ]);
+
           aiBot = await spawnAI(server, weights);
           matchActive = true;
 

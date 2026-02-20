@@ -28,6 +28,10 @@ class ServerManager {
     this.ready     = false;
     this._rconQueue = Promise.resolve();
     this._rconReconnecting = false;
+    // Play server binds to 0.0.0.0 so a human can connect from outside.
+    // Training server always binds to 127.0.0.1.  Use this to gate play-server
+    // specific config tweaks (view distance, gamemode, movement thresholds).
+    this._isPlayServer = (bindHost === '0.0.0.0');
   }
 
   async start() {
@@ -165,11 +169,11 @@ class ServerManager {
       `rcon.password=${cfg.RCON_PASSWORD}`,
       `online-mode=false`,
       `max-players=10`,
-      `view-distance=2`,
+      `view-distance=${this._isPlayServer ? 10 : 2}`,
       `pvp=true`,
-      `difficulty=0`,
-      `gamemode=2`,
-      `force-gamemode=true`,
+      `difficulty=1`,
+      `gamemode=${this._isPlayServer ? 0 : 2}`,
+      `force-gamemode=${this._isPlayServer ? 'false' : 'true'}`,
       `spawn-npcs=false`,
       `spawn-animals=false`,
       `spawn-monsters=false`,
@@ -196,13 +200,17 @@ class ServerManager {
     // config-version must match so Spigot does not regenerate.
     // Key values: connection-throttle:-1, restart-on-crash:false,
     // timeout-time:300, max-tick-time both -1.
+    // moved-wrongly/too-quickly thresholds: relaxed for play server so a real
+    // human doesn't get rubber-banded; kept high for training bots.
+    const movedWrongly   = this._isPlayServer ? 0.0625 : 100.0;
+    const movedTooQuickly = this._isPlayServer ? 100.0  : 100.0;
     return `config-version: 8
 settings:
   debug: false
   save-user-cache-on-stop-only: true
-  moved-wrongly-threshold: 100.0
-  moved-too-quickly-threshold: 100.0
-  moved-too-quickly-multiplier: 100.0
+  moved-wrongly-threshold: ${movedWrongly}
+  moved-too-quickly-threshold: ${movedTooQuickly}
+  moved-too-quickly-multiplier: 10.0
   bungeecord: false
   late-bind: false
   sample-count: 12
