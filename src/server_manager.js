@@ -124,6 +124,7 @@ class ServerManager {
       `enable-command-block=true`,
       `allow-flight=true`,
       `max-tick-time=-1`,
+      `max-world-size=1000`,
     ].join('\n');
   }
 
