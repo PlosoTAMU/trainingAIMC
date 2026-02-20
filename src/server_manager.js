@@ -37,6 +37,23 @@ class ServerManager {
     await this._spawnProcess();
     log.step('Server', 'start() — waitForReady');
     await this._waitForReady();
+
+    // Spigot regenerates spigot.yml / bukkit.yml / server.properties on first
+    // boot, overwriting whatever we wrote in _prepareDir.  Now that it has
+    // finished starting we patch those files with our required values and
+    // immediately stop + relaunch so the server actually runs with them.
+    const needsRestart = await this._patchConfigsIfNeeded();
+    if (needsRestart) {
+      log.step('Server', 'configs patched — restarting server to apply them');
+      if (this.process) {
+        this.process.kill('SIGKILL');
+        this.process = null;
+      }
+      await sleep(2000);
+      await this._spawnProcess();
+      await this._waitForReady();
+    }
+
     log.step('Server', 'start() — connectRcon');
     await this._connectRcon();
     log.step('Server', 'start() — applyGlobalRules');
@@ -120,100 +137,136 @@ class ServerManager {
       await fs.copy(jarSrc, jarDst);
     }
 
-    await fs.writeFile(path.join(this.serverDir, 'server.properties'),
-      this._serverProperties());
+    // Always write eula.txt so the server doesn't refuse to start.
     await fs.writeFile(path.join(this.serverDir, 'eula.txt'), 'eula=true\n');
 
-    await this._writeSpigotConfig();
-    await this._writeBukkitConfig();
+    // Write server.properties with our required keys merged in.
+    // We do NOT simply overwrite — we read what exists and patch key=value
+    // lines so Spigot's own generated keys are preserved alongside ours.
+    await this._patchProperties(path.join(this.serverDir, 'server.properties'),
+      this._requiredProperties());
   }
 
-  _serverProperties() {
-    const maxPlayers = 10;
-    return [
-      `server-port=${this.port}`,
-      `server-ip=${this.bindHost === '0.0.0.0' ? '' : this.bindHost}`,
-      `enable-rcon=true`,
-      `rcon.port=${this.rconPort}`,
-      `rcon.password=${cfg.RCON_PASSWORD}`,
-      `online-mode=false`,
-      `max-players=${maxPlayers}`,
-      `view-distance=2`,
-      `pvp=true`,
-      `difficulty=peaceful`,
-      `gamemode=2`,
-      `spawn-npcs=false`,
-      `spawn-animals=false`,
-      `spawn-monsters=false`,
-      `generate-structures=false`,
-      `level-type=FLAT`,
-      `generator-settings=3;minecraft:bedrock,1;1;`,
-      `level-name=world`,
-      `motd=PvP Training Server`,
-      `network-compression-threshold=-1`,
-      `use-native-transport=true`,
-      `enable-command-block=true`,
-      `allow-flight=true`,
-      `max-tick-time=-1`,
-      `connection-throttle=0`,
-    ].join('\n');
+  /**
+   * Read a Java properties file, overlay our required key=value pairs, write back.
+   * Lines that already have the correct value are left untouched.
+   * New keys are appended.  Returns true if any value was changed.
+   */
+  async _patchProperties(filePath, required) {
+    let existing = {};
+    let lines = [];
+    if (await fs.pathExists(filePath)) {
+      const raw = await fs.readFile(filePath, 'utf8');
+      lines = raw.split('\n');
+      for (const line of lines) {
+        const m = line.match(/^([^#=\s][^=]*)=(.*)$/);
+        if (m) existing[m[1].trim()] = m[2].trim();
+      }
+    }
+
+    let changed = false;
+    for (const [k, v] of Object.entries(required)) {
+      if (String(existing[k]) !== String(v)) {
+        changed = true;
+        // Update in-place if the key already exists
+        let found = false;
+        lines = lines.map(line => {
+          const m = line.match(/^([^#=\s][^=]*)=(.*)$/);
+          if (m && m[1].trim() === k) { found = true; return `${k}=${v}`; }
+          return line;
+        });
+        if (!found) lines.push(`${k}=${v}`);
+      }
+    }
+
+    await fs.writeFile(filePath, lines.join('\n'));
+    return changed;
   }
 
-  async _writeSpigotConfig() {
-    const config = `
-settings:
-  save-user-cache-on-stop-only: true
-  moved-wrongly-threshold: 100.0
-  moved-too-quickly-multiplier: 100.0
-  connection-throttle: -1
-  timeout-time: 300
-  player-shuffle: 0
-world-settings:
-  default:
-    mob-spawn-range: 0
-    entity-activation-range:
-      animals: 0
-      monsters: 0
-      misc: 0
-    entity-tracking-range:
-      players: 48
-      animals: 0
-      monsters: 0
-      misc: 0
-      other: 0
-    tick-inactive-villagers: false
-    merge-radius:
-      exp: 10.0
-      item: 10.0
-    max-tick-time:
-      tile: 1000
-      entity: 1000
-`.trimStart();
-    await fs.writeFile(path.join(this.serverDir, 'spigot.yml'), config);
+  _requiredProperties() {
+    return {
+      'server-port':                    this.port,
+      'server-ip':                      this.bindHost === '0.0.0.0' ? '' : this.bindHost,
+      'enable-rcon':                    'true',
+      'rcon.port':                      this.rconPort,
+      'rcon.password':                  cfg.RCON_PASSWORD,
+      'online-mode':                    'false',
+      'max-players':                    '10',
+      'view-distance':                  '2',
+      'pvp':                            'true',
+      'difficulty':                     '0',      // peaceful = 0
+      'gamemode':                       '2',
+      'spawn-npcs':                     'false',
+      'spawn-animals':                  'false',
+      'spawn-monsters':                 'false',
+      'generate-structures':            'false',
+      'level-type':                     'FLAT',
+      'level-name':                     'world',
+      'motd':                           'PvP Training Server',
+      'network-compression-threshold':  '-1',
+      'use-native-transport':           'true',
+      'enable-command-block':           'true',
+      'allow-flight':                   'true',
+      'max-tick-time':                  '-1',
+      'connection-throttle':            '-1',
+    };
   }
 
-  async _writeBukkitConfig() {
-    const config = `
-settings:
-  allow-end: false
-  warn-on-overload: false
-  plugin-profiling: false
-  connection-throttle: -1
-  query-plugins: false
-  shutdown-message: Server closed
-spawn-limits:
-  monsters: 0
-  animals: 0
-  water-animals: 0
-  ambient: 0
-chunk-gc:
-  period-in-ticks: 9999
-ticks-per:
-  animal-spawns: 99999
-  monster-spawns: 99999
-  autosave: -1
-`.trimStart();
-    await fs.writeFile(path.join(this.serverDir, 'bukkit.yml'), config);
+  /**
+   * Read a YAML file and patch specific scalar values using simple regex
+   * (no full YAML parser needed — these are flat key: value lines).
+   * Returns true if anything changed.
+   */
+  async _patchYaml(filePath, patches) {
+    if (!await fs.pathExists(filePath)) return false;
+    let text = await fs.readFile(filePath, 'utf8');
+    let changed = false;
+    for (const [key, value] of Object.entries(patches)) {
+      // Match "  key: <anything>" (any indentation level)
+      const re = new RegExp(`^(\\s*${key}:\\s*)(.+)$`, 'm');
+      const replacement = `$1${value}`;
+      const updated = text.replace(re, replacement);
+      if (updated !== text) { text = updated; changed = true; }
+    }
+    if (changed) await fs.writeFile(filePath, text);
+    return changed;
+  }
+
+  /**
+   * After first boot, Spigot has regenerated its config files.
+   * Patch the critical values and return true if anything changed
+   * (caller will restart the server to pick them up).
+   */
+  async _patchConfigsIfNeeded() {
+    log.step('Server', 'patching configs post-boot');
+
+    const spigotChanged = await this._patchYaml(
+      path.join(this.serverDir, 'spigot.yml'), {
+        'connection-throttle': '-1',
+        'timeout-time':        '300',
+        'netty-threads':       '2',
+        'moved-wrongly-threshold':    '100.0',
+        'moved-too-quickly-multiplier': '100.0',
+      }
+    );
+
+    const bukkitChanged = await this._patchYaml(
+      path.join(this.serverDir, 'bukkit.yml'), {
+        'connection-throttle': '-1',
+        'warn-on-overload':    'false',
+      }
+    );
+
+    const propsChanged = await this._patchProperties(
+      path.join(this.serverDir, 'server.properties'),
+      this._requiredProperties()
+    );
+
+    if (spigotChanged)  log.step('Server', 'spigot.yml was patched');
+    if (bukkitChanged)  log.step('Server', 'bukkit.yml was patched');
+    if (propsChanged)   log.step('Server', 'server.properties was patched');
+
+    return spigotChanged || bukkitChanged || propsChanged;
   }
 
   async _spawnProcess() {
