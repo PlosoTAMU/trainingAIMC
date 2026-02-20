@@ -59,6 +59,14 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
       username,
       version: '1.8.9',
       auth: 'offline',
+      checkTimeoutInterval: 10000,
+      hideErrors: false,
+    });
+
+    // ADD THIS - better error logging
+    bot.on('error', err => {
+      console.error(`[Bot ${username}] Error:`, err.message);
+      reject(err);
     });
 
     const ping = randomPing();

@@ -11,7 +11,7 @@ module.exports = {
   RCON_PASSWORD: 'pvptrainer',
 
   JAVA_FLAGS: [
-    '-Xmx4G', '-Xms4G',
+    '-Xmx2G', '-Xms2G',
     '-XX:+UseG1GC',
     '-XX:+ParallelRefProcEnabled',
     '-XX:MaxGCPauseMillis=200',
@@ -53,7 +53,7 @@ module.exports = {
   },
 
   TRAINING: {
-    PARALLEL_ZONES: 8,
+    PARALLEL_ZONES: 4,
     POP_SIZE: 32,
     FIGHTS_PER_AGENT: 5,
     TOP_FRACTION: 0.28,

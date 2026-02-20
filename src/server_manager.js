@@ -97,7 +97,7 @@ class ServerManager {
   }
 
   _serverProperties() {
-    const maxPlayers = cfg.TRAINING.PARALLEL_ZONES * 2 + 4;
+    const maxPlayers = cfg.TRAINING.PARALLEL_ZONES * 2 + 10;
     return [
       `server-port=${this.port}`,
       `server-ip=${this.bindHost === '0.0.0.0' ? '' : this.bindHost}`,
@@ -118,7 +118,8 @@ class ServerManager {
       `generator-settings=3;minecraft:bedrock,1;1;`,
       `level-name=world`,
       `motd=PvP Training Server`,
-      `network-compression-threshold=256`,
+      `network-compression-threshold=-1`,
+      `connection-throttle=-1`,
       `use-native-transport=true`,
       `enable-command-block=true`,
       `allow-flight=true`,

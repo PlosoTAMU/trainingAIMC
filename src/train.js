@@ -92,22 +92,23 @@ async function runFight(server, zoneId, weightsA, weightsB, idxA, idxB) {
   const spawnA = ServerManager.zoneSpawnA(zoneId);
   const spawnB = ServerManager.zoneSpawnB(zoneId);
 
-  const [botA, botB] = await Promise.all([
-    createBot({
-      host: '127.0.0.1',
-      port: cfg.SERVER_PORT,
-      username: `A${idxA}_Z${zoneId}`,
-      weights: weightsA,
-      zoneOriginX: zoneId * cfg.ZONE.SPACING,
-    }),
-    createBot({
-      host: '127.0.0.1',
-      port: cfg.SERVER_PORT,
-      username: `B${idxB}_Z${zoneId}`,
-      weights: weightsB,
-      zoneOriginX: zoneId * cfg.ZONE.SPACING,
-    }),
-  ]);
+  const botA = await createBot({
+    host: '127.0.0.1',
+    port: cfg.SERVER_PORT,
+    username: `A${idxA}_Z${zoneId}`,
+    weights: weightsA,
+    zoneOriginX: zoneId * cfg.ZONE.SPACING,
+  });
+
+  await sleep(500);  // ADD THIS LINE - 500ms delay between bots
+
+  const botB = await createBot({
+    host: '127.0.0.1',
+    port: cfg.SERVER_PORT,
+    username: `B${idxB}_Z${zoneId}`,
+    weights: weightsB,
+    zoneOriginX: zoneId * cfg.ZONE.SPACING,
+  });
 
   await server.rconBatch([
     `tp ${botA.bot.username} ${spawnA.x} ${spawnA.y} ${spawnA.z}`,
