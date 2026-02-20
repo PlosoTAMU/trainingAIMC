@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs-extra');
 const { Rcon } = require('rcon-client');
 const cfg = require('../config');
+const log = require('./logger');
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -30,12 +31,18 @@ class ServerManager {
   }
 
   async start() {
+    log.step('Server', 'start() — prepareDir');
     await this._prepareDir();
+    log.step('Server', 'start() — spawnProcess');
     await this._spawnProcess();
+    log.step('Server', 'start() — waitForReady');
     await this._waitForReady();
+    log.step('Server', 'start() — connectRcon');
     await this._connectRcon();
+    log.step('Server', 'start() — applyGlobalRules');
     await this._applyGlobalRules();
     this.ready = true;
+    log.info('Server', `✓ Ready on port ${this.port}`);
     console.log(`[Server] ✓ Ready on port ${this.port}`);
   }
 
@@ -81,18 +88,25 @@ class ServerManager {
 
   async _sendRcon(cmd) {
     if (!this._rconClient) {
-      // Try to reconnect once
-      try { await this._connectRcon(); } catch { return; }
+      log.warn('RCON', `_sendRcon("${cmd}") — no client, reconnecting`);
+      try { await this._connectRcon(); } catch (e) {
+        log.error('RCON', `reconnect failed before "${cmd}"`, e);
+        return;
+      }
     }
     try {
       return await this._rconClient.send(cmd);
     } catch (e) {
+      log.error('RCON', `send("${cmd}") failed`, e);
       // Connection lost — try reconnecting once
       if (!this._rconReconnecting) {
+        log.step('RCON', `attempting reconnect after send failure for "${cmd}"`);
         try {
           await this._connectRcon();
           return await this._rconClient.send(cmd);
-        } catch {}
+        } catch (e2) {
+          log.error('RCON', `send("${cmd}") failed again after reconnect`, e2);
+        }
       }
     }
   }
@@ -221,8 +235,9 @@ ticks-per:
       if (this._stdout.length > MAX_LOG_LENGTH) {
         this._stdout = this._stdout.slice(-MAX_LOG_LENGTH);
       }
-      // Uncomment for debugging:
-      // console.log('[Server]', chunk.trim());
+      // Mirror every line of MC output to the debug log file
+      const trimmed = chunk.trim();
+      if (trimmed) log.step('MC-OUT', trimmed);
     });
 
     this.process.stderr.on('data', d => {
@@ -232,20 +247,20 @@ ticks-per:
       if (this._stderr.length > MAX_LOG_LENGTH) {
         this._stderr = this._stderr.slice(-MAX_LOG_LENGTH);
       }
-      // Uncomment for debugging:
-      // console.error('[Server ERR]', chunk.trim());
+      const trimmed = chunk.trim();
+      if (trimmed) log.warn('MC-ERR', trimmed);
     });
 
     this.process.on('exit', code => {
       if (this.ready) {
-        console.error(`[Server] Process exited unexpectedly (code ${code})`);
+        log.error('Server', `Process exited unexpectedly (code ${code})`, new Error(`exit code ${code}`));
         this.ready = false;
       }
     });
 
     // Prevent unhandled error events from crashing the process
     this.process.on('error', err => {
-      console.error(`[Server] Process error: ${err.message}`);
+      log.error('Server', 'Process spawn error', err);
     });
   }
 
@@ -271,12 +286,17 @@ ticks-per:
   }
 
   async _connectRcon() {
-    if (this._rconReconnecting) return;
+    if (this._rconReconnecting) {
+      log.step('RCON', '_connectRcon called while already reconnecting — skipping');
+      return;
+    }
     this._rconReconnecting = true;
+    log.step('RCON', `_connectRcon start (port ${this.rconPort})`);
 
     try {
       // Clean up old connection
       if (this._rconClient) {
+        log.step('RCON', 'tearing down stale client');
         try { this._rconClient.removeAllListeners(); } catch {}
         try { await this._rconClient.end(); } catch {}
         this._rconClient = null;
@@ -286,6 +306,7 @@ ticks-per:
 
       const maxRetries = 5;
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        log.step('RCON', `connect attempt ${attempt}/${maxRetries}`);
         try {
           const rcon = new Rcon({
             host: '127.0.0.1',
@@ -296,10 +317,11 @@ ticks-per:
 
           // Absorb socket-level errors so they don't crash the process
           rcon.on('error', err => {
-            console.error(`[RCON] Connection error: ${err.message}`);
+            log.error('RCON', 'socket error on live connection', err);
           });
 
           rcon.on('end', () => {
+            log.warn('RCON', 'connection ended — will reconnect on next command');
             // Mark client as gone so _sendRcon knows to reconnect
             if (this._rconClient === rcon) {
               this._rconClient = null;
@@ -308,10 +330,14 @@ ticks-per:
 
           await rcon.connect();
           this._rconClient = rcon;
+          log.step('RCON', `connected successfully on attempt ${attempt}`);
           return;
         } catch (err) {
+          log.error('RCON', `connect attempt ${attempt} failed`, err);
           if (attempt < maxRetries) {
-            await sleep(2000 * attempt);
+            const delay = 2000 * attempt;
+            log.step('RCON', `waiting ${delay}ms before retry`);
+            await sleep(delay);
           } else {
             throw err;
           }

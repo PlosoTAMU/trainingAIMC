@@ -10,6 +10,7 @@ const cfg = require('../config');
 const { ServerManager } = require('./server_manager');
 const { createBot } = require('./bot');
 const nn = require('./neural_net');
+const log = require('./logger');
 
 const { TRAINING, BOXING } = cfg;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -21,6 +22,8 @@ let server = null;
 let fightCounter = 0;
 
 async function main() {
+  log.info('Main', `═══ Training session started (pid=${process.pid}) ═══`);
+  log.info('Main', `Log file: ${log.LOG_FILE}`);
   console.log(chalk.bold.cyan('\n⚔  MC 1.8 PvP AI Trainer  ⚔\n'));
 
   server = new ServerManager();
@@ -90,6 +93,7 @@ async function evaluatePopulation(population) {
       scores[result.oppIdx] += result.oppScore;
       console.log(chalk.green(`${result.score}-${result.oppScore}`));
     } catch (err) {
+      log.error('EvalPop', `fight ${i + 1} threw`, err);
       console.log(chalk.red(`FAILED: ${err.message}`));
     }
 
@@ -108,12 +112,16 @@ async function runFight(weightsA, weightsB, idxA, idxB) {
   fightCounter++;
   const nameA = `A${fightCounter}`;
   const nameB = `B${fightCounter}`;
+  const FTAG = `FIGHT:${fightCounter}`;
 
   let botA = null;
   let botB = null;
 
   try {
+    log.step(FTAG, `starting — agents ${idxA} vs ${idxB}, names ${nameA}/${nameB}`);
+
     // Kick any leftover players from previous fights (belt-and-suspenders)
+    log.step(FTAG, 'pre-kicking any stale sessions');
     await server.rconBatch([
       `kick ${nameA} reset`,
       `kick ${nameB} reset`,
@@ -121,6 +129,7 @@ async function runFight(weightsA, weightsB, idxA, idxB) {
     await sleep(500);
 
     // Connect bot A with retry
+    log.step(FTAG, `connecting ${nameA}`);
     botA = await connectBotWithRetry({
       host: '127.0.0.1',
       port: cfg.SERVER_PORT,
@@ -128,11 +137,13 @@ async function runFight(weightsA, weightsB, idxA, idxB) {
       weights: weightsA,
       zoneOriginX: 0,
     });
+    log.step(FTAG, `${nameA} connected`);
 
     // Stagger connections to avoid overwhelming the server
     await sleep(2000);
 
     // Connect bot B with retry
+    log.step(FTAG, `connecting ${nameB}`);
     botB = await connectBotWithRetry({
       host: '127.0.0.1',
       port: cfg.SERVER_PORT,
@@ -140,8 +151,10 @@ async function runFight(weightsA, weightsB, idxA, idxB) {
       weights: weightsB,
       zoneOriginX: 0,
     });
+    log.step(FTAG, `${nameB} connected`);
 
     // Setup arena
+    log.step(FTAG, 'setting up arena via RCON');
     await sleep(1500);
     await server.rconBatch([
       `gamemode 2 ${nameA}`,
@@ -157,11 +170,13 @@ async function runFight(weightsA, weightsB, idxA, idxB) {
     ]);
 
     // Start fight
+    log.step(FTAG, 'starting fight');
     await sleep(500);
     botA.startFighting();
     botB.startFighting();
 
     // Wait for fight duration
+    log.step(FTAG, `waiting ${BOXING.HIT_TIMEOUT_MS}ms for fight to complete`);
     await sleep(BOXING.HIT_TIMEOUT_MS);
 
     // Stop fighting before reading results
@@ -171,6 +186,7 @@ async function runFight(weightsA, weightsB, idxA, idxB) {
     // Get results
     const hitsA = botA.getHits().myHits;
     const hitsB = botB.getHits().myHits;
+    log.step(FTAG, `fight complete — ${nameA}:${hitsA} hits, ${nameB}:${hitsB} hits`);
 
     return {
       idx: idxA,
@@ -180,25 +196,30 @@ async function runFight(weightsA, weightsB, idxA, idxB) {
     };
 
   } finally {
+    log.step(FTAG, 'finally — cleaning up bots');
+
     // ALWAYS cleanup — disconnect bots first, then force-kick via RCON
     if (botA) {
       try { botA.stopFighting(); } catch {}
-      try { botA.disconnect(); } catch {}
+      try { botA.disconnect(); } catch (e) { log.warn(FTAG, `botA disconnect error: ${e.message}`); }
     }
     if (botB) {
       try { botB.stopFighting(); } catch {}
-      try { botB.disconnect(); } catch {}
+      try { botB.disconnect(); } catch (e) { log.warn(FTAG, `botB disconnect error: ${e.message}`); }
     }
 
     // Force-kick via RCON in case bot.quit() didn't reach the server
     await sleep(500);
+    log.step(FTAG, 'RCON force-kick');
     await server.rconBatch([
       `kick ${nameA} cleanup`,
       `kick ${nameB} cleanup`,
-    ]).catch(() => {});
+    ]).catch((e) => log.warn(FTAG, `RCON kick failed: ${e.message}`));
 
     // Wait for server to fully process disconnections
+    log.step(FTAG, 'waiting 2s for server to process disconnections');
     await sleep(2000);
+    log.step(FTAG, 'cleanup complete');
   }
 }
 
@@ -208,10 +229,15 @@ async function runFight(weightsA, weightsB, idxA, idxB) {
  * processing a previous disconnection.
  */
 async function connectBotWithRetry(opts, maxRetries = 3) {
+  const TAG = `CONNECT:${opts.username}`;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    log.step(TAG, `attempt ${attempt}/${maxRetries}`);
     try {
-      return await createBot(opts);
+      const ctrl = await createBot(opts);
+      log.step(TAG, `success on attempt ${attempt}`);
+      return ctrl;
     } catch (err) {
+      log.error(TAG, `attempt ${attempt} failed`, err);
       const isRetryable = (
         err.message.includes('ECONNRESET') ||
         err.message.includes('ECONNREFUSED') ||
@@ -219,9 +245,12 @@ async function connectBotWithRetry(opts, maxRetries = 3) {
         err.message.includes('Timed out')
       );
       if (attempt < maxRetries && isRetryable) {
+        const delay = 3000 * attempt;
+        log.step(TAG, `retryable error — waiting ${delay}ms`);
         console.log(chalk.yellow(`    Retry ${attempt}/${maxRetries} for ${opts.username}: ${err.message}`));
-        await sleep(3000 * attempt);
+        await sleep(delay);
       } else {
+        log.error(TAG, `giving up after ${attempt} attempts`, err);
         throw err;
       }
     }
@@ -311,14 +340,26 @@ process.on('SIGTERM', async () => {
 
 // Catch stray unhandled rejections (e.g. ECONNRESET from sockets closing)
 // so they don't crash the training loop
-process.on('unhandledRejection', (reason) => {
+process.on('unhandledRejection', (reason, promise) => {
   const msg = reason && reason.message ? reason.message : String(reason);
-  // Silence expected network-level errors; log anything unexpected
-  if (msg.includes('ECONNRESET') || msg.includes('ECONNREFUSED') || msg.includes('This socket has been ended')) {
-    // expected during bot disconnect cycles
+  // Always log to file with full stack; only suppress console noise for known-safe errors
+  log.error('UnhandledRejection', 'caught unhandled rejection', reason instanceof Error ? reason : new Error(msg));
+  if (
+    msg.includes('ECONNRESET') ||
+    msg.includes('ECONNREFUSED') ||
+    msg.includes('This socket has been ended') ||
+    msg.includes('write after end')
+  ) {
+    // These are expected during bot disconnect cycles — already logged above
   } else {
     console.error(chalk.yellow('[Unhandled Rejection]'), msg);
   }
+});
+
+process.on('uncaughtException', (err) => {
+  log.error('UncaughtException', 'UNCAUGHT EXCEPTION — process will exit', err);
+  console.error(chalk.red('[UncaughtException]'), err);
+  process.exit(1);
 });
 
 main().catch(e => {

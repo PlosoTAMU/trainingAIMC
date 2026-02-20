@@ -5,6 +5,7 @@ const mineflayer = require('mineflayer');
 const { EventEmitter } = require('events');
 const { NN: nnCfg, ZONE, BOXING, PING } = require('../config');
 const nn = require('./neural_net');
+const log = require('./logger');
 
 const DECISION_INTERVAL_MS = Math.round(1000 / nnCfg.DECISION_HZ);
 
@@ -66,9 +67,13 @@ function randomActions() {
 }
 
 function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
+  const TAG = `BOT:${username}`;
   return new Promise((resolve, reject) => {
+    log.step(TAG, `createBot() called → ${host}:${port}`);
+
     // Connection timeout
     const connectionTimeout = setTimeout(() => {
+      log.error(TAG, 'connection timeout (30s)', new Error('Connection timeout'));
       cleanup();
       reject(new Error(`${username}: Connection timeout`));
     }, 30000);
@@ -84,6 +89,7 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
     }
 
     try {
+      log.step(TAG, 'calling mineflayer.createBot()');
       bot = mineflayer.createBot({
         host,
         port,
@@ -94,6 +100,7 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
         hideErrors: true,
       });
     } catch (err) {
+      log.error(TAG, 'mineflayer.createBot() threw synchronously', err);
       cleanup();
       reject(err);
       return;
@@ -111,28 +118,54 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
     let lastAttackTime = 0;
     let isDisconnected = false;
 
-    // Catch-all error handler — absorb socket errors (ECONNRESET, etc.)
+    // ── Socket-level error handler ─────────────────────────────────────────
+    // Fires BEFORE spawn (connection errors) AND after spawn (mid-session errors).
     const errorHandler = (err) => {
+      log.error(TAG, `bot "error" event (resolved=${resolved})`, err);
       if (!resolved) {
         cleanup();
         reject(err);
         return;
       }
-      // After successful spawn, absorb errors silently
-      // (these are typically ECONNRESET during disconnect)
+      // After successful spawn, absorb — these are typically ECONNRESET on disconnect
     };
     bot.on('error', errorHandler);
 
-    // Also catch errors on the underlying socket
-    bot._client && bot._client.on && bot._client.on('error', () => {});
+    // Also intercept errors on the raw minecraft-protocol client socket
+    // mineflayer creates bot._client (minecraft-protocol Client) which has a socket
+    // We attach after the next tick so bot._client is definitely populated
+    setImmediate(() => {
+      try {
+        if (bot._client) {
+          bot._client.on('error', (err) => {
+            log.error(TAG, 'bot._client "error" event (minecraft-protocol level)', err);
+          });
+          if (bot._client.socket) {
+            bot._client.socket.on('error', (err) => {
+              log.error(TAG, 'bot._client.socket "error" event (raw TCP level)', err);
+            });
+            bot._client.socket.on('close', (hadError) => {
+              log.step(TAG, `raw socket "close" event (hadError=${hadError})`);
+            });
+          }
+          bot._client.on('end', () => {
+            log.step(TAG, 'bot._client "end" event');
+          });
+        }
+      } catch (e) {
+        log.warn(TAG, `could not attach _client listeners: ${e.message}`);
+      }
+    });
 
     bot.on('kicked', reason => {
+      log.warn(TAG, `kicked: ${JSON.stringify(reason)}`);
       isDisconnected = true;
       stopFighting();
       emitter.emit('kicked', reason);
     });
 
-    bot.on('end', () => {
+    bot.on('end', (reason) => {
+      log.step(TAG, `bot "end" event (reason=${reason || 'none'})`);
       isDisconnected = true;
       stopFighting();
     });
@@ -238,6 +271,7 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
 
     function disconnect() {
       if (isDisconnected) return;
+      log.step(TAG, 'disconnect() called');
       isDisconnected = true;
       stopFighting();
       try {
@@ -245,15 +279,20 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
         // Also silence the underlying client
         if (bot._client) {
           try { bot._client.removeAllListeners('error'); } catch {}
-          bot._client.on('error', () => {});
+          bot._client.on('error', (err) => {
+            log.step(TAG, `suppressed post-disconnect _client error: ${err.message}`);
+          });
         }
         bot.quit();
-      } catch {}
+      } catch (e) {
+        log.warn(TAG, `bot.quit() threw: ${e.message}`);
+      }
       // Force-close the socket after a short grace period
       setTimeout(() => {
         try {
           if (bot._client && bot._client.socket) {
             bot._client.socket.destroy();
+            log.step(TAG, 'socket force-destroyed');
           }
         } catch {}
       }, 1000);
@@ -274,9 +313,9 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
     };
 
     bot.once('spawn', () => {
+      log.step(TAG, `spawned successfully (hp=${bot.health}, ping=${ping}ms)`);
       clearTimeout(connectionTimeout);
       resolved = true;
-      // Keep the error handler attached — it now absorbs post-connect errors
       lastHp = bot.health || 20;
       resolve(controller);
     });
