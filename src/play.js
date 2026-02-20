@@ -57,7 +57,7 @@ async function main() {
   console.log(chalk.cyan('Starting play server...'));
   await server.start();
 
-  await server.rcon('gamerule naturalRegeneration true');
+  await server.sendCommand('gamerule naturalRegeneration true');
 
   const lanIps = getLanIps();
   console.log(chalk.green.bold(`\n✓ Server ready (port ${PLAY_PORT})\n`));
@@ -82,7 +82,7 @@ async function main() {
     while (true) {
       await sleep(2000);
       try {
-        const list = await server._sendRcon('list');
+        const list = await server.sendCommand('list');
         if (!list) continue;
 
         const countMatch = list.match(/There are (\d+)/);

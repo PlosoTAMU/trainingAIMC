@@ -8,6 +8,9 @@ const cfg = require('../config');
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// Maximum characters to keep in stdout/stderr ring buffers
+const MAX_LOG_LENGTH = 32768;
+
 class ServerManager {
   constructor({
     port      = cfg.SERVER_PORT,
@@ -20,9 +23,10 @@ class ServerManager {
     this.serverDir = path.resolve(serverDir);
     this.bindHost  = bindHost;
     this.process   = null;
-    this.rcon      = null;
+    this._rconClient = null;
     this.ready     = false;
     this._rconQueue = Promise.resolve();
+    this._rconReconnecting = false;
   }
 
   async start() {
@@ -37,11 +41,12 @@ class ServerManager {
 
   async stop() {
     this.ready = false;
-    if (this.rcon) {
-      try { await this.rcon.send('stop'); } catch {}
-      await sleep(1500);
-      try { this.rcon.disconnect(); } catch {}
-      this.rcon = null;
+    if (this._rconClient) {
+      try { await this._rconClient.send('stop'); } catch {}
+      await sleep(2000);
+      try { this._rconClient.removeAllListeners(); } catch {}
+      try { await this._rconClient.end(); } catch {}
+      this._rconClient = null;
     }
     if (this.process) {
       this.process.kill('SIGKILL');
@@ -49,11 +54,20 @@ class ServerManager {
     }
   }
 
-  rcon(cmd) {
+  /**
+   * Send a single RCON command (queued, resilient).
+   * Named sendCommand to avoid shadowing the _rconClient property.
+   */
+  sendCommand(cmd) {
     this._rconQueue = this._rconQueue
       .then(() => this._sendRcon(cmd))
       .catch(() => {});
     return this._rconQueue;
+  }
+
+  // Keep backward-compat alias — but as a method that won't shadow properties
+  rcon(cmd) {
+    return this.sendCommand(cmd);
   }
 
   async rconBatch(cmds) {
@@ -66,14 +80,20 @@ class ServerManager {
   }
 
   async _sendRcon(cmd) {
-    if (!this.rcon) return;
+    if (!this._rconClient) {
+      // Try to reconnect once
+      try { await this._connectRcon(); } catch { return; }
+    }
     try {
-      return await this.rcon.send(cmd);
+      return await this._rconClient.send(cmd);
     } catch (e) {
-      try {
-        await this._connectRcon();
-        return await this.rcon.send(cmd);
-      } catch {}
+      // Connection lost — try reconnecting once
+      if (!this._rconReconnecting) {
+        try {
+          await this._connectRcon();
+          return await this._rconClient.send(cmd);
+        } catch {}
+      }
     }
   }
 
@@ -189,19 +209,31 @@ ticks-per:
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
+    // Use ring-buffered strings to prevent unbounded memory growth.
+    // Only the tail of the output is kept (enough for startup detection).
     this._stdout = '';
     this._stderr = '';
 
     this.process.stdout.on('data', d => {
-      this._stdout += d.toString();
+      let chunk;
+      try { chunk = d.toString(); } catch { return; }
+      this._stdout += chunk;
+      if (this._stdout.length > MAX_LOG_LENGTH) {
+        this._stdout = this._stdout.slice(-MAX_LOG_LENGTH);
+      }
       // Uncomment for debugging:
-      // console.log('[Server]', d.toString().trim());
+      // console.log('[Server]', chunk.trim());
     });
 
     this.process.stderr.on('data', d => {
-      this._stderr += d.toString();
+      let chunk;
+      try { chunk = d.toString(); } catch { return; }
+      this._stderr += chunk;
+      if (this._stderr.length > MAX_LOG_LENGTH) {
+        this._stderr = this._stderr.slice(-MAX_LOG_LENGTH);
+      }
       // Uncomment for debugging:
-      // console.error('[Server ERR]', d.toString().trim());
+      // console.error('[Server ERR]', chunk.trim());
     });
 
     this.process.on('exit', code => {
@@ -209,6 +241,11 @@ ticks-per:
         console.error(`[Server] Process exited unexpectedly (code ${code})`);
         this.ready = false;
       }
+    });
+
+    // Prevent unhandled error events from crashing the process
+    this.process.on('error', err => {
+      console.error(`[Server] Process error: ${err.message}`);
     });
   }
 
@@ -234,14 +271,55 @@ ticks-per:
   }
 
   async _connectRcon() {
-    await sleep(1000);
-    this.rcon = new Rcon({
-      host: '127.0.0.1',
-      port: this.rconPort,
-      password: cfg.RCON_PASSWORD,
-      timeout: 10000,
-    });
-    await this.rcon.connect();
+    if (this._rconReconnecting) return;
+    this._rconReconnecting = true;
+
+    try {
+      // Clean up old connection
+      if (this._rconClient) {
+        try { this._rconClient.removeAllListeners(); } catch {}
+        try { await this._rconClient.end(); } catch {}
+        this._rconClient = null;
+      }
+
+      await sleep(1000);
+
+      const maxRetries = 5;
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          const rcon = new Rcon({
+            host: '127.0.0.1',
+            port: this.rconPort,
+            password: cfg.RCON_PASSWORD,
+            timeout: 10000,
+          });
+
+          // Absorb socket-level errors so they don't crash the process
+          rcon.on('error', err => {
+            console.error(`[RCON] Connection error: ${err.message}`);
+          });
+
+          rcon.on('end', () => {
+            // Mark client as gone so _sendRcon knows to reconnect
+            if (this._rconClient === rcon) {
+              this._rconClient = null;
+            }
+          });
+
+          await rcon.connect();
+          this._rconClient = rcon;
+          return;
+        } catch (err) {
+          if (attempt < maxRetries) {
+            await sleep(2000 * attempt);
+          } else {
+            throw err;
+          }
+        }
+      }
+    } finally {
+      this._rconReconnecting = false;
+    }
   }
 
   async _applyGlobalRules() {

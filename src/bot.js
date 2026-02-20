@@ -69,10 +69,20 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
   return new Promise((resolve, reject) => {
     // Connection timeout
     const connectionTimeout = setTimeout(() => {
+      cleanup();
       reject(new Error(`${username}: Connection timeout`));
     }, 30000);
 
+    let resolved = false;
     let bot;
+
+    function cleanup() {
+      clearTimeout(connectionTimeout);
+      if (bot && !resolved) {
+        try { bot.removeAllListeners(); } catch {}
+      }
+    }
+
     try {
       bot = mineflayer.createBot({
         host,
@@ -84,7 +94,7 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
         hideErrors: true,
       });
     } catch (err) {
-      clearTimeout(connectionTimeout);
+      cleanup();
       reject(err);
       return;
     }
@@ -101,14 +111,20 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
     let lastAttackTime = 0;
     let isDisconnected = false;
 
-    // Error handler
+    // Catch-all error handler — absorb socket errors (ECONNRESET, etc.)
     const errorHandler = (err) => {
-      clearTimeout(connectionTimeout);
-      if (!isDisconnected) {
+      if (!resolved) {
+        cleanup();
         reject(err);
+        return;
       }
+      // After successful spawn, absorb errors silently
+      // (these are typically ECONNRESET during disconnect)
     };
     bot.on('error', errorHandler);
+
+    // Also catch errors on the underlying socket
+    bot._client && bot._client.on && bot._client.on('error', () => {});
 
     bot.on('kicked', reason => {
       isDisconnected = true;
@@ -226,8 +242,21 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
       stopFighting();
       try {
         bot.removeAllListeners();
+        // Also silence the underlying client
+        if (bot._client) {
+          try { bot._client.removeAllListeners('error'); } catch {}
+          bot._client.on('error', () => {});
+        }
         bot.quit();
       } catch {}
+      // Force-close the socket after a short grace period
+      setTimeout(() => {
+        try {
+          if (bot._client && bot._client.socket) {
+            bot._client.socket.destroy();
+          }
+        } catch {}
+      }, 1000);
     }
 
     // Create controller ONCE, properly
@@ -246,7 +275,8 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
 
     bot.once('spawn', () => {
       clearTimeout(connectionTimeout);
-      bot.removeListener('error', errorHandler);
+      resolved = true;
+      // Keep the error handler attached — it now absorbs post-connect errors
       lastHp = bot.health || 20;
       resolve(controller);
     });

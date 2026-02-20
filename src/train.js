@@ -16,7 +16,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // Global state
 let server = null;
-let activeConnections = 0;
+
+// Monotonically increasing fight ID to guarantee unique bot names
+let fightCounter = 0;
 
 async function main() {
   console.log(chalk.bold.cyan('\n⚔  MC 1.8 PvP AI Trainer  ⚔\n'));
@@ -102,47 +104,56 @@ async function runFight(weightsA, weightsB, idxA, idxB) {
   const spawnA = ServerManager.zoneSpawnA(0);
   const spawnB = ServerManager.zoneSpawnB(0);
 
+  // Unique names per fight to avoid collisions with stale sessions
+  fightCounter++;
+  const nameA = `A${fightCounter}`;
+  const nameB = `B${fightCounter}`;
+
   let botA = null;
   let botB = null;
 
   try {
-    // Connect bot A
-    await sleep(3000);
-    botA = await createBot({
+    // Kick any leftover players from previous fights (belt-and-suspenders)
+    await server.rconBatch([
+      `kick ${nameA} reset`,
+      `kick ${nameB} reset`,
+    ]);
+    await sleep(500);
+
+    // Connect bot A with retry
+    botA = await connectBotWithRetry({
       host: '127.0.0.1',
       port: cfg.SERVER_PORT,
-      username: `BotA`,
+      username: nameA,
       weights: weightsA,
       zoneOriginX: 0,
     });
-    activeConnections++;
 
-    // Wait between connections
-    await sleep(3000);
+    // Stagger connections to avoid overwhelming the server
+    await sleep(2000);
 
-    // Connect bot B
-    botB = await createBot({
+    // Connect bot B with retry
+    botB = await connectBotWithRetry({
       host: '127.0.0.1',
       port: cfg.SERVER_PORT,
-      username: `BotB`,
+      username: nameB,
       weights: weightsB,
       zoneOriginX: 0,
     });
-    activeConnections++;
 
     // Setup arena
-    await sleep(1000);
+    await sleep(1500);
     await server.rconBatch([
-      `tp BotA ${spawnA.x} ${spawnA.y} ${spawnA.z}`,
-      `tp BotB ${spawnB.x} ${spawnB.y} ${spawnB.z}`,
-      `clear BotA`,
-      `clear BotB`,
-      `give BotA diamond_sword 1 0 {Unbreakable:1}`,
-      `give BotB diamond_sword 1 0 {Unbreakable:1}`,
-      `effect BotA instant_health 1 255 true`,
-      `effect BotB instant_health 1 255 true`,
-      `gamemode 2 BotA`,
-      `gamemode 2 BotB`,
+      `gamemode 2 ${nameA}`,
+      `gamemode 2 ${nameB}`,
+      `tp ${nameA} ${spawnA.x} ${spawnA.y} ${spawnA.z}`,
+      `tp ${nameB} ${spawnB.x} ${spawnB.y} ${spawnB.z}`,
+      `clear ${nameA}`,
+      `clear ${nameB}`,
+      `give ${nameA} diamond_sword 1 0 {Unbreakable:1}`,
+      `give ${nameB} diamond_sword 1 0 {Unbreakable:1}`,
+      `effect ${nameA} instant_health 1 255 true`,
+      `effect ${nameB} instant_health 1 255 true`,
     ]);
 
     // Start fight
@@ -152,6 +163,10 @@ async function runFight(weightsA, weightsB, idxA, idxB) {
 
     // Wait for fight duration
     await sleep(BOXING.HIT_TIMEOUT_MS);
+
+    // Stop fighting before reading results
+    botA.stopFighting();
+    botB.stopFighting();
 
     // Get results
     const hitsA = botA.getHits().myHits;
@@ -165,24 +180,51 @@ async function runFight(weightsA, weightsB, idxA, idxB) {
     };
 
   } finally {
-    // ALWAYS cleanup
+    // ALWAYS cleanup — disconnect bots first, then force-kick via RCON
     if (botA) {
-      try {
-        botA.stopFighting();
-        botA.disconnect();
-        activeConnections--;
-      } catch {}
+      try { botA.stopFighting(); } catch {}
+      try { botA.disconnect(); } catch {}
     }
     if (botB) {
-      try {
-        botB.stopFighting();
-        botB.disconnect();
-        activeConnections--;
-      } catch {}
+      try { botB.stopFighting(); } catch {}
+      try { botB.disconnect(); } catch {}
     }
 
-    // Wait for server to process disconnections
+    // Force-kick via RCON in case bot.quit() didn't reach the server
+    await sleep(500);
+    await server.rconBatch([
+      `kick ${nameA} cleanup`,
+      `kick ${nameB} cleanup`,
+    ]).catch(() => {});
+
+    // Wait for server to fully process disconnections
     await sleep(2000);
+  }
+}
+
+/**
+ * Attempt to connect a bot with retries.
+ * ECONNRESET on initial connect is common if the server is still
+ * processing a previous disconnection.
+ */
+async function connectBotWithRetry(opts, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await createBot(opts);
+    } catch (err) {
+      const isRetryable = (
+        err.message.includes('ECONNRESET') ||
+        err.message.includes('ECONNREFUSED') ||
+        err.message.includes('timeout') ||
+        err.message.includes('Timed out')
+      );
+      if (attempt < maxRetries && isRetryable) {
+        console.log(chalk.yellow(`    Retry ${attempt}/${maxRetries} for ${opts.username}: ${err.message}`));
+        await sleep(3000 * attempt);
+      } else {
+        throw err;
+      }
+    }
   }
 }
 
@@ -265,6 +307,18 @@ process.on('SIGINT', async () => {
 process.on('SIGTERM', async () => {
   if (server) await server.stop();
   process.exit(0);
+});
+
+// Catch stray unhandled rejections (e.g. ECONNRESET from sockets closing)
+// so they don't crash the training loop
+process.on('unhandledRejection', (reason) => {
+  const msg = reason && reason.message ? reason.message : String(reason);
+  // Silence expected network-level errors; log anything unexpected
+  if (msg.includes('ECONNRESET') || msg.includes('ECONNREFUSED') || msg.includes('This socket has been ended')) {
+    // expected during bot disconnect cycles
+  } else {
+    console.error(chalk.yellow('[Unhandled Rejection]'), msg);
+  }
 });
 
 main().catch(e => {
