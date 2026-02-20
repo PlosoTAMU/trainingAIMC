@@ -135,6 +135,33 @@ class ServerManager {
     // Spigot 1.8 will NOT regenerate a file that already exists with a valid
     // config-version header — so writing them here means our values survive.
     await this._rewriteConfigs();
+
+    // For the play server, delete any stale world so it always regenerates
+    // with our current generator-settings (correct flat layers at FLOOR_Y).
+    if (this._isPlayServer) {
+      for (const worldDir of ['world', 'world_nether', 'world_the_end']) {
+        const p = path.join(this.serverDir, worldDir);
+        if (await fs.pathExists(p)) {
+          await fs.remove(p);
+          log.step('Server', `deleted stale world: ${worldDir}`);
+        }
+      }
+    } else {
+      // For the training server, delete the world only once if it was generated
+      // with the old broken generator-settings (sentinel file tracks this).
+      const sentinel = path.join(this.serverDir, '.world_gen_v2');
+      if (!await fs.pathExists(sentinel)) {
+        for (const worldDir of ['world', 'world_nether', 'world_the_end']) {
+          const p = path.join(this.serverDir, worldDir);
+          if (await fs.pathExists(p)) {
+            await fs.remove(p);
+            log.step('Server', `deleted old-generator world: ${worldDir}`);
+          }
+        }
+        await fs.writeFile(sentinel, 'generator=2;7,4x3,2;1\n');
+        log.step('Server', 'wrote world gen sentinel');
+      }
+    }
   }
 
   /**
@@ -179,7 +206,7 @@ class ServerManager {
       `spawn-monsters=false`,
       `generate-structures=false`,
       `level-type=FLAT`,
-      `generator-settings=3;minecraft:bedrock,1;1;`,
+      `generator-settings=2;7,4x3,2;1`,
       `level-name=world`,
       `motd=PvP Training Server`,
       `network-compression-threshold=-1`,
@@ -482,6 +509,9 @@ aliases: now-in-commands.yml
       'gamerule doEntityDrops false',
       'gamerule showDeathMessages false',
       'time set 6000',
+      // Set world spawn to zone 0 so players respawn near the fight area,
+      // not at default 0,64,0 in what may be void or far away.
+      `setworldspawn 0 ${cfg.ZONE.FLOOR_Y} 0`,
     ]);
   }
 

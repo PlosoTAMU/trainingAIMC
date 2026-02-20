@@ -57,7 +57,11 @@ async function main() {
   console.log(chalk.cyan('Starting play server...'));
   await server.start();
 
-  await server.sendCommand('gamerule naturalRegeneration true');
+  // Play-server-specific rules on top of the global ones
+  await server.rconBatch([
+    'gamerule naturalRegeneration true',  // human gets normal HP regen
+    'op Ploso',                            // give Ploso operator
+  ]);
 
   const lanIps = getLanIps();
   console.log(chalk.green.bold(`\n✓ Server ready (port ${PLAY_PORT})\n`));
@@ -77,6 +81,72 @@ async function main() {
   let humanName = null;
   let humanHits = 0;
   let aiHits = 0;
+
+  // Re-arm the fight after a result (human stays on server)
+  const resetMatch = async () => {
+    await sleep(4000); // let the title/sound play
+    if (!humanName) return;
+    // check human is still online
+    try {
+      const list = await server.sendCommand('list');
+      if (!list || !list.includes(humanName)) return;
+    } catch { return; }
+
+    console.log(chalk.cyan('\n[Match] Starting rematch...'));
+    humanHits = 0;
+    aiHits = 0;
+
+    const sp = ServerManager.zoneSpawnA(PLAYER_ZONE);
+    await server.rconBatch([
+      `tp ${humanName} ${sp.x} ${sp.y} ${sp.z} ${sp.yaw} 0`,
+      `clear ${humanName}`,
+      `give ${humanName} minecraft:diamond_sword 1 0 {Unbreakable:1}`,
+      `effect ${humanName} minecraft:instant_health 1 255 true`,
+    ]);
+
+    if (aiBot) {
+      aiBot.stopFighting();
+      aiBot.disconnect();
+      aiBot = null;
+    }
+    aiBot = await spawnAI(server, weights);
+    attachAiBotListeners();
+    matchActive = true;
+  };
+
+  const attachAiBotListeners = () => {
+    aiBot.on('hitLanded', count => {
+      if (!matchActive) return;
+      aiHits = count;
+      if (BOXING.HEAL_ON_HIT) {
+        setTimeout(
+          () => server.rcon(`effect ${humanName} minecraft:instant_health 1 1 true`),
+          BOXING.HEAL_DELAY_MS,
+        );
+      }
+      if (count >= BOXING.HITS_TO_WIN) {
+        console.log(chalk.red.bold(`\n[Match] AI wins — ${BOXING.HITS_TO_WIN} hits!`));
+        matchActive = false;
+        announceResult(server, true, humanName).then(resetMatch);
+      }
+    });
+
+    aiBot.on('hitTaken', count => {
+      if (!matchActive) return;
+      humanHits = count;
+      if (BOXING.HEAL_ON_HIT) {
+        setTimeout(
+          () => server.rcon(`effect ${BOT_NAME} minecraft:instant_health 1 1 true`),
+          BOXING.HEAL_DELAY_MS,
+        );
+      }
+      if (count >= BOXING.HITS_TO_WIN) {
+        console.log(chalk.green.bold(`\n[Match] ${humanName} wins — ${BOXING.HITS_TO_WIN} hits!`));
+        matchActive = false;
+        announceResult(server, false, humanName).then(resetMatch);
+      }
+    });
+  };
 
   const monitor = async () => {
     while (true) {
@@ -99,7 +169,7 @@ async function main() {
           humanHits = 0;
           aiHits = 0;
 
-          // Put the human in survival and teleport them to zone A spawn.
+          // Teleport human to zone A, give sword, full heal
           const sp = ServerManager.zoneSpawnA(PLAYER_ZONE);
           await server.rconBatch([
             `gamemode 0 ${humanName}`,
@@ -110,44 +180,16 @@ async function main() {
           ]);
 
           aiBot = await spawnAI(server, weights);
+          attachAiBotListeners();
           matchActive = true;
-
-          aiBot.on('hitLanded', count => {
-            aiHits = count;
-            if (BOXING.HEAL_ON_HIT) {
-              setTimeout(
-                () => server.rcon(`effect ${humanName} minecraft:instant_health 1 1 true`),
-                BOXING.HEAL_DELAY_MS,
-              );
-            }
-            if (count >= BOXING.HITS_TO_WIN) {
-              console.log(chalk.red.bold(`\n[Match] AI wins — ${BOXING.HITS_TO_WIN} hits!`));
-              announceResult(server, true, humanName);
-              matchActive = false;
-            }
-          });
-
-          aiBot.on('hitTaken', count => {
-            humanHits = count;
-            if (BOXING.HEAL_ON_HIT) {
-              setTimeout(
-                () => server.rcon(`effect ${BOT_NAME} minecraft:instant_health 1 1 true`),
-                BOXING.HEAL_DELAY_MS,
-              );
-            }
-            if (count >= BOXING.HITS_TO_WIN) {
-              console.log(chalk.green.bold(`\n[Match] ${humanName} wins — ${BOXING.HITS_TO_WIN} hits!`));
-              announceResult(server, false, humanName);
-              matchActive = false;
-            }
-          });
 
         } else if (humanCount === 0 && aiBot) {
           console.log(chalk.yellow('\n[Match] Human disconnected — AI leaving.'));
+          matchActive = false;
           aiBot.stopFighting();
           aiBot.disconnect();
           aiBot = null;
-          matchActive = false;
+          humanName = null;
         }
       } catch {}
     }
