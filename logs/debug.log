@@ -1,0 +1,128 @@
+[2026-02-20T19:02:18.879Z] [INFO ] [Main] ═══ Training session started (pid=22359) ═══
+[2026-02-20T19:02:18.879Z] [INFO ] [Main] Log file: /home/plosouser/Downloads/trainingAIMC/logs/debug.log
+[2026-02-20T19:02:18.880Z] [STEP ] [Server] start() — prepareDir
+[2026-02-20T19:02:18.889Z] [STEP ] [Server] start() — spawnProcess
+[2026-02-20T19:02:18.893Z] [STEP ] [Server] start() — waitForReady
+[2026-02-20T19:02:19.112Z] [STEP ] [MC-OUT] Loading libraries, please wait...
+[2026-02-20T19:02:20.843Z] [STEP ] [MC-OUT] [13:02:20 INFO]: Starting minecraft server version 1.8.8
+[2026-02-20T19:02:20.844Z] [STEP ] [MC-OUT] [13:02:20 INFO]: Loading properties
+[2026-02-20T19:02:20.850Z] [STEP ] [MC-OUT] [13:02:20 INFO]: Default game type: ADVENTURE
+[2026-02-20T19:02:20.918Z] [STEP ] [MC-OUT] [13:02:20 INFO]: This server is running CraftBukkit version git-Spigot-21fe707-741a1bd (MC: 1.8.8) (Implementing API version 1.8.8-R0.1-SNAPSHOT)
+[2026-02-20T19:02:20.960Z] [STEP ] [MC-OUT] [13:02:20 INFO]: Debug logging is disabled
+[2026-02-20T19:02:20.961Z] [STEP ] [MC-OUT] [13:02:20 INFO]: Server Ping Player Sample Count: 12
+[2026-02-20T19:02:20.963Z] [STEP ] [MC-OUT] [13:02:20 INFO]: Using 2 threads for Netty based IO
+[2026-02-20T19:02:20.974Z] [STEP ] [MC-OUT] [13:02:20 INFO]: Generating keypair
+[2026-02-20T19:02:21.126Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Starting Minecraft server on 127.0.0.1:25570
+[2026-02-20T19:02:21.154Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Your platform does not provide complete low-level API for accessing direct buffers reliably. Unless explicitly requested, heap buffer will always be preferred to avoid potential system unstability.
+[2026-02-20T19:02:21.159Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Using epoll channel type
+[2026-02-20T19:02:21.207Z] [STEP ] [MC-OUT] [13:02:21 WARN]: **** SERVER IS RUNNING IN OFFLINE/INSECURE MODE!
+[2026-02-20T19:02:21.207Z] [STEP ] [MC-OUT] [13:02:21 WARN]: The server will make no attempt to authenticate usernames. Beware.
+[13:02:21 WARN]: While this makes the game possible to play without internet access, it also opens up the ability for hackers to connect with any username they choose.
+[2026-02-20T19:02:21.207Z] [STEP ] [MC-OUT] [13:02:21 WARN]: To change this, set "online-mode" to "true" in the server.properties file.
+[2026-02-20T19:02:21.207Z] [STEP ] [MC-OUT] [13:02:21 INFO]: **** Beginning UUID conversion, this may take A LONG time ****
+[2026-02-20T19:02:21.227Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Preparing level "world"
+[2026-02-20T19:02:21.239Z] [STEP ] [MC-OUT] [13:02:21 INFO]: -------- World Settings For [world] --------
+[2026-02-20T19:02:21.239Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Nerfing mobs spawned from spawners: false
+[2026-02-20T19:02:21.239Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Cactus Growth Modifier: 100%
+[2026-02-20T19:02:21.240Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Cane Growth Modifier: 100%
+[2026-02-20T19:02:21.240Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Melon Growth Modifier: 100%
+[2026-02-20T19:02:21.240Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Mushroom Growth Modifier: 100%
+[2026-02-20T19:02:21.240Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Pumpkin Growth Modifier: 100%
+[2026-02-20T19:02:21.240Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Sapling Growth Modifier: 100%
+[2026-02-20T19:02:21.241Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Wheat Growth Modifier: 100%
+[13:02:21 INFO]: NetherWart Growth Modifier: 100%
+[2026-02-20T19:02:21.241Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Mob Spawn Range: 4
+[2026-02-20T19:02:21.241Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Anti X-Ray: true
+[2026-02-20T19:02:21.241Z] [STEP ] [MC-OUT] [13:02:21 INFO]: 	Engine Mode: 1
+[2026-02-20T19:02:21.242Z] [STEP ] [MC-OUT] [13:02:21 INFO]: 	Hidden Blocks: [14, 15, 16, 21, 48, 49, 54, 56, 73, 74, 82, 129, 130]
+[2026-02-20T19:02:21.242Z] [STEP ] [MC-OUT] [13:02:21 INFO]: 	Replace Blocks: [1, 5]
+[2026-02-20T19:02:21.244Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Entity Activation Range: An 32 / Mo 32 / Mi 16
+[2026-02-20T19:02:21.244Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Entity Tracking Range: Pl 48 / An 48 / Mo 48 / Mi 32 / Other 64
+[2026-02-20T19:02:21.244Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Hopper Transfer: 8 Hopper Check: 8 Hopper Amount: 1
+[2026-02-20T19:02:21.245Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Random Lighting Updates: false
+[2026-02-20T19:02:21.245Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Structure Info Saving: true
+[2026-02-20T19:02:21.245Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Sending up to 10 chunks per packet
+[2026-02-20T19:02:21.245Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Max Entity Collisions: 8
+[2026-02-20T19:02:21.246Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Custom Map Seeds:  Village: 10387312 Feature: 14357617
+[2026-02-20T19:02:21.246Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Max TNT Explosions: 100
+[2026-02-20T19:02:21.246Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Tile Max Tick Time: 50ms Entity max Tick Time: 50ms
+[2026-02-20T19:02:21.246Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Item Despawn Rate: 6000
+[2026-02-20T19:02:21.247Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Item Merge Radius: 2.5
+[2026-02-20T19:02:21.247Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Arrow Despawn Rate: 1200
+[2026-02-20T19:02:21.247Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Allow Zombie Pigmen to spawn from portal blocks: true
+[2026-02-20T19:02:21.247Z] [STEP ] [MC-OUT] [13:02:21 INFO]: View Distance: 2
+[2026-02-20T19:02:21.248Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Zombie Aggressive Towards Villager: true
+[2026-02-20T19:02:21.248Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Chunks to Grow per Tick: 650
+[2026-02-20T19:02:21.248Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Clear tick list: false
+[2026-02-20T19:02:21.248Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Experience Merge Radius: 3.0
+[2026-02-20T19:02:21.286Z] [STEP ] [MC-OUT] [13:02:21 INFO]: -------- World Settings For [world_nether] --------
+[2026-02-20T19:02:21.286Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Nerfing mobs spawned from spawners: false
+[2026-02-20T19:02:21.286Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Cactus Growth Modifier: 100%
+[2026-02-20T19:02:21.287Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Cane Growth Modifier: 100%
+[2026-02-20T19:02:21.287Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Melon Growth Modifier: 100%
+[2026-02-20T19:02:21.287Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Mushroom Growth Modifier: 100%
+[2026-02-20T19:02:21.287Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Pumpkin Growth Modifier: 100%
+[2026-02-20T19:02:21.287Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Sapling Growth Modifier: 100%
+[2026-02-20T19:02:21.287Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Wheat Growth Modifier: 100%
+[2026-02-20T19:02:21.288Z] [STEP ] [MC-OUT] [13:02:21 INFO]: NetherWart Growth Modifier: 100%
+[2026-02-20T19:02:21.288Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Mob Spawn Range: 4
+[2026-02-20T19:02:21.288Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Anti X-Ray: true
+[2026-02-20T19:02:21.288Z] [STEP ] [MC-OUT] [13:02:21 INFO]: 	Engine Mode: 1
+[2026-02-20T19:02:21.288Z] [STEP ] [MC-OUT] [13:02:21 INFO]: 	Hidden Blocks: [14, 15, 16, 21, 48, 49, 54, 56, 73, 74, 82, 129, 130]
+[2026-02-20T19:02:21.288Z] [STEP ] [MC-OUT] [13:02:21 INFO]: 	Replace Blocks: [1, 5]
+[2026-02-20T19:02:21.289Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Entity Activation Range: An 32 / Mo 32 / Mi 16
+[2026-02-20T19:02:21.289Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Entity Tracking Range: Pl 48 / An 48 / Mo 48 / Mi 32 / Other 64
+[2026-02-20T19:02:21.289Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Hopper Transfer: 8 Hopper Check: 8 Hopper Amount: 1
+[2026-02-20T19:02:21.289Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Random Lighting Updates: false
+[2026-02-20T19:02:21.289Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Structure Info Saving: true
+[2026-02-20T19:02:21.290Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Sending up to 10 chunks per packet
+[2026-02-20T19:02:21.290Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Max Entity Collisions: 8
+[2026-02-20T19:02:21.290Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Custom Map Seeds:  Village: 10387312 Feature: 14357617
+[2026-02-20T19:02:21.290Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Max TNT Explosions: 100
+[2026-02-20T19:02:21.290Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Tile Max Tick Time: 50ms Entity max Tick Time: 50ms
+[2026-02-20T19:02:21.291Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Item Despawn Rate: 6000
+[2026-02-20T19:02:21.291Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Item Merge Radius: 2.5
+[2026-02-20T19:02:21.291Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Arrow Despawn Rate: 1200
+[2026-02-20T19:02:21.291Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Allow Zombie Pigmen to spawn from portal blocks: true
+[2026-02-20T19:02:21.291Z] [STEP ] [MC-OUT] [13:02:21 INFO]: View Distance: 2
+[2026-02-20T19:02:21.292Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Zombie Aggressive Towards Villager: true
+[2026-02-20T19:02:21.292Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Chunks to Grow per Tick: 650
+[2026-02-20T19:02:21.292Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Clear tick list: false
+[2026-02-20T19:02:21.292Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Experience Merge Radius: 3.0
+[2026-02-20T19:02:21.306Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Preparing start region for level 0 (Seed: 5915785355217471969)
+[2026-02-20T19:02:21.518Z] [STEP ] [MC-OUT] [13:02:21 INFO]: Preparing start region for level 1 (Seed: 5915785355217471969)
+[2026-02-20T19:02:22.124Z] [STEP ] [MC-OUT] [13:02:22 INFO]: Server permissions file permissions.yml is empty, ignoring it
+[2026-02-20T19:02:22.135Z] [STEP ] [MC-OUT] [13:02:22 INFO]: Done (0.924s)! For help, type "help" or "?"
+[2026-02-20T19:02:22.136Z] [STEP ] [MC-OUT] [13:02:22 INFO]: Starting remote control listener
+[2026-02-20T19:02:22.137Z] [STEP ] [MC-OUT] [13:02:22 INFO]: RCON running on 127.0.0.1:25575
+[2026-02-20T19:02:22.397Z] [STEP ] [Server] patching configs post-boot
+[2026-02-20T19:02:22.400Z] [STEP ] [Server] start() — connectRcon
+[2026-02-20T19:02:22.400Z] [STEP ] [RCON] _connectRcon start (port 25575)
+[2026-02-20T19:02:23.402Z] [STEP ] [RCON] connect attempt 1/5
+[2026-02-20T19:02:23.406Z] [STEP ] [MC-OUT] [13:02:23 INFO]: Rcon connection from: /127.0.0.1
+[2026-02-20T19:02:23.408Z] [STEP ] [RCON] connected successfully on attempt 1
+[2026-02-20T19:02:23.408Z] [STEP ] [Server] start() — applyGlobalRules
+[2026-02-20T19:02:24.038Z] [INFO ] [Server] ✓ Ready on port 25570
+[2026-02-20T19:02:29.043Z] [STEP ] [FIGHT:1] starting — agents 0 vs 1, names A1/B1
+[2026-02-20T19:02:29.043Z] [STEP ] [FIGHT:1] pre-kicking any stale sessions
+[2026-02-20T19:02:29.639Z] [STEP ] [FIGHT:1] connecting A1
+[2026-02-20T19:02:29.639Z] [STEP ] [CONNECT:A1] attempt 1/3
+[2026-02-20T19:02:29.639Z] [STEP ] [BOT:A1] createBot() called → 127.0.0.1:25570
+[2026-02-20T19:02:29.640Z] [STEP ] [BOT:A1] calling mineflayer.createBot()
+[2026-02-20T19:02:29.755Z] [ERROR] [BOT:A1] bot "error" event (resolved=false): read ECONNRESET [code=ECONNRESET] [syscall=read]
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:218:20)
+[2026-02-20T19:02:29.756Z] [ERROR] [BOT:A1] bot._client "error" event (minecraft-protocol level): read ECONNRESET [code=ECONNRESET] [syscall=read]
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:218:20)
+[2026-02-20T19:02:29.757Z] [STEP ] [BOT:A1] bot._client "end" event
+[2026-02-20T19:02:29.757Z] [ERROR] [BOT:A1] bot._client.socket "error" event (raw TCP level): read ECONNRESET [code=ECONNRESET] [syscall=read]
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:218:20)
+[2026-02-20T19:02:29.757Z] [ERROR] [CONNECT:A1] attempt 1 failed: read ECONNRESET [code=ECONNRESET] [syscall=read]
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:218:20)
+[2026-02-20T19:02:29.757Z] [STEP ] [CONNECT:A1] retryable error — waiting 3000ms
+[2026-02-20T19:02:29.757Z] [STEP ] [MC-OUT] [13:02:29 INFO]: Stopping server
+[2026-02-20T19:02:29.759Z] [STEP ] [BOT:A1] raw socket "close" event (hadError=true)
+[2026-02-20T19:02:30.220Z] [STEP ] [RCON] connection ended — will reconnect on next command
