@@ -39,7 +39,7 @@ module.exports = {
   // ── Zone layout ────────────────────────────────────────────────────────────
   ZONE: {
     SPACING: 500,
-    FLOOR_Y: 5,
+    FLOOR_Y: 4,
     FIGHTER_SEP: 10,
   },
 

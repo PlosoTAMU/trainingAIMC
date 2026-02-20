@@ -149,7 +149,7 @@ class ServerManager {
     } else {
       // For the training server, delete the world only once if it was generated
       // with the old broken generator-settings (sentinel file tracks this).
-      const sentinel = path.join(this.serverDir, '.world_gen_v2');
+      const sentinel = path.join(this.serverDir, '.world_gen_v3');
       if (!await fs.pathExists(sentinel)) {
         for (const worldDir of ['world', 'world_nether', 'world_the_end']) {
           const p = path.join(this.serverDir, worldDir);
@@ -158,7 +158,7 @@ class ServerManager {
             log.step('Server', `deleted old-generator world: ${worldDir}`);
           }
         }
-        await fs.writeFile(sentinel, 'generator=2;7,4x3,2;1\n');
+        await fs.writeFile(sentinel, 'generator=default-flat,floor_y=4\n');
         log.step('Server', 'wrote world gen sentinel');
       }
     }
@@ -206,7 +206,7 @@ class ServerManager {
       `spawn-monsters=false`,
       `generate-structures=false`,
       `level-type=FLAT`,
-      `generator-settings=2;7,4x3,2;1`,
+      `generator-settings=`,
       `level-name=world`,
       `motd=PvP Training Server`,
       `network-compression-threshold=-1`,
@@ -299,7 +299,7 @@ world-settings:
     chunks-per-tick: 650
     clear-tick-list: false
     item-despawn-rate: 6000
-    view-distance: 2
+    view-distance: ${this._isPlayServer ? 10 : 2}
     arrow-despawn-rate: 1200
     wither-spawn-sound-radius: 0
     hanging-tick-frequency: 100
