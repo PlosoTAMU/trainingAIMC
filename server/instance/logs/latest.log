@@ -1,0 +1,311 @@
+[13:24:24] [Server thread/INFO]: Starting minecraft server version 1.8.8
+[13:24:24] [Server thread/INFO]: Loading properties
+[13:24:24] [Server thread/INFO]: Default game type: ADVENTURE
+[13:24:24] [Server thread/INFO]: This server is running CraftBukkit version git-Spigot-21fe707-741a1bd (MC: 1.8.8) (Implementing API version 1.8.8-R0.1-SNAPSHOT)
+[13:24:24] [Server thread/INFO]: Debug logging is disabled
+[13:24:24] [Server thread/INFO]: Server Ping Player Sample Count: 12
+
+[13:24:24] [Server thread/INFO]: Using 2 threads for Netty based IO
+[13:24:24] [Server thread/INFO]: Generating keypair
+[13:24:24] [Server thread/INFO]: Starting Minecraft server on 127.0.0.1:25570
+[13:24:24] [Server thread/INFO]: Your platform does not provide complete low-level API for accessing direct buffers reliably. Unless explicitly requested, heap buffer will always be preferred to avoid potential system unstability.
+[13:24:24] [Server thread/INFO]: Using default channel type
+[13:24:25] [Server thread/WARN]: **** SERVER IS RUNNING IN OFFLINE/INSECURE MODE!
+[13:24:25] [Server thread/WARN]: The server will make no attempt to authenticate usernames. Beware.
+[13:24:25] [Server thread/WARN]: While this makes the game possible to play without internet access, it also opens up the ability for hackers to connect with any username they choose.
+[13:24:25] [Server thread/WARN]: To change this, set "online-mode" to "true" in the server.properties file.
+[13:24:25] [Server thread/INFO]: **** Beginning UUID conversion, this may take A LONG time ****
+[13:24:25] [Server thread/INFO]: Preparing level "world"
+[13:24:25] [Server thread/INFO]: Preparing start region for level 0 (Seed: 5915785355217471969)
+[13:24:25] [Server thread/INFO]: Preparing start region for level 1 (Seed: 5915785355217471969)
+[13:24:26] [Server thread/INFO]: Server permissions file permissions.yml is empty, ignoring it
+[13:24:26] [Server thread/INFO]: Done (1.105s)! For help, type "help" or "?"
+[13:24:26] [Server thread/INFO]: Starting remote control listener
+[13:24:26] [RCON Listener #1/INFO]: RCON running on 127.0.0.1:25575
+[13:24:27] [RCON Listener #1/INFO]: Rcon connection from: /127.0.0.1
+[13:24:33] [Thread-4/INFO]: UUID of player A1 is b96d1d31-09bd-3e85-862d-70b8519fb1cd
+[13:24:33] [Server thread/INFO]: A1[/127.0.0.1:55658] logged in with entity id 0 at ([world]-527.5, 4.0, -281.5)
+[13:24:35] [Thread-5/INFO]: UUID of player B1 is b75f6b13-5a6f-3f60-92a9-f33030899e55
+[13:24:35] [Server thread/INFO]: B1[/127.0.0.1:55212] logged in with entity id 1 at ([world]-527.5, 4.0, -281.5)
+[13:24:53] [Server thread/INFO]: A1 lost connection: Disconnected
+[13:24:53] [Server thread/INFO]: A1 left the game.
+[13:24:53] [Server thread/INFO]: B1 lost connection: Disconnected
+[13:24:53] [Server thread/INFO]: B1 left the game.
+[13:24:58] [Thread-6/INFO]: UUID of player A2 is 7ed58932-d01f-3827-8b29-a0372b76972d
+[13:24:58] [Server thread/INFO]: A2[/127.0.0.1:49064] logged in with entity id 4 at ([world]-527.5, 4.0, -281.5)
+[13:25:00] [Thread-7/INFO]: UUID of player B2 is 01efce26-cb3a-36e2-81fa-effc2f0bda92
+[13:25:00] [Server thread/INFO]: B2[/127.0.0.1:49072] logged in with entity id 5 at ([world]-527.5, 4.0, -281.5)
+[13:25:18] [Server thread/INFO]: A2 lost connection: Disconnected
+[13:25:18] [Server thread/INFO]: A2 left the game.
+[13:25:18] [Server thread/INFO]: B2 lost connection: Disconnected
+[13:25:18] [Server thread/INFO]: B2 left the game.
+[13:25:23] [Thread-8/INFO]: UUID of player A3 is f74923ed-af24-3cf7-92ba-3106fc875b21
+[13:25:23] [Server thread/INFO]: A3[/127.0.0.1:39346] logged in with entity id 10 at ([world]-527.5, 4.0, -281.5)
+[13:25:25] [Thread-9/INFO]: UUID of player B3 is dfcf4683-87b0-3148-b975-2e61a7cc697d
+[13:25:25] [Server thread/INFO]: B3[/127.0.0.1:39354] logged in with entity id 11 at ([world]-527.5, 4.0, -281.5)
+[13:25:43] [Server thread/INFO]: A3 lost connection: Disconnected
+[13:25:43] [Server thread/INFO]: A3 left the game.
+[13:25:43] [Server thread/INFO]: B3 lost connection: Disconnected
+[13:25:43] [Server thread/INFO]: B3 left the game.
+[13:25:48] [Thread-10/INFO]: UUID of player A4 is 1561e5af-f5e5-3cf4-9774-fe1238288f3c
+[13:25:48] [Server thread/INFO]: A4[/127.0.0.1:33140] logged in with entity id 18 at ([world]-527.5, 4.0, -281.5)
+[13:25:50] [Thread-11/INFO]: UUID of player B4 is 4657700f-140f-3320-a9ce-87c19ff3ea5d
+[13:25:50] [Server thread/INFO]: B4[/127.0.0.1:33142] logged in with entity id 19 at ([world]-527.5, 4.0, -281.5)
+[13:26:08] [Server thread/INFO]: A4 lost connection: Disconnected
+[13:26:08] [Server thread/INFO]: A4 left the game.
+[13:26:08] [Server thread/INFO]: B4 lost connection: Disconnected
+[13:26:08] [Server thread/INFO]: B4 left the game.
+[13:26:13] [Thread-12/INFO]: UUID of player A5 is 8d5817ee-d630-3a03-b0e3-66a5b99b0e39
+[13:26:13] [Server thread/INFO]: A5[/127.0.0.1:40372] logged in with entity id 28 at ([world]-527.5, 4.0, -281.5)
+[13:26:15] [Thread-13/INFO]: UUID of player B5 is 49953a10-a94e-39fb-9426-882304a9ffe0
+[13:26:15] [Server thread/INFO]: B5[/127.0.0.1:40386] logged in with entity id 29 at ([world]-527.5, 4.0, -281.5)
+[13:26:33] [Server thread/INFO]: A5 lost connection: Disconnected
+[13:26:33] [Server thread/INFO]: A5 left the game.
+[13:26:33] [Server thread/INFO]: B5 lost connection: Disconnected
+[13:26:33] [Server thread/INFO]: B5 left the game.
+[13:26:38] [Thread-14/INFO]: UUID of player A6 is 16e51f97-2772-3c5f-8bd2-76eaeb2ab817
+[13:26:38] [Server thread/INFO]: A6[/127.0.0.1:37818] logged in with entity id 40 at ([world]-527.5, 4.0, -281.5)
+[13:26:40] [Thread-15/INFO]: UUID of player B6 is cbaea300-b194-3aa8-8aa7-2e16fe12020b
+[13:26:40] [Server thread/INFO]: B6[/127.0.0.1:37826] logged in with entity id 41 at ([world]-527.5, 4.0, -281.5)
+[13:26:58] [Server thread/INFO]: A6 lost connection: Disconnected
+[13:26:58] [Server thread/INFO]: A6 left the game.
+[13:26:58] [Server thread/INFO]: B6 lost connection: Disconnected
+[13:26:58] [Server thread/INFO]: B6 left the game.
+[13:27:03] [Thread-16/INFO]: UUID of player A7 is 394dad80-ac12-3778-a5e5-e625eaba4748
+[13:27:03] [Server thread/INFO]: A7[/127.0.0.1:46850] logged in with entity id 54 at ([world]-527.5, 4.0, -281.5)
+[13:27:05] [Thread-17/INFO]: UUID of player B7 is b97468c9-c190-3b7e-aacd-5dbb5189c2ac
+[13:27:05] [Server thread/INFO]: B7[/127.0.0.1:46862] logged in with entity id 55 at ([world]-527.5, 4.0, -281.5)
+[13:27:22] [Server thread/INFO]: A7 lost connection: Disconnected
+[13:27:22] [Server thread/INFO]: A7 left the game.
+[13:27:22] [Server thread/INFO]: B7 lost connection: Disconnected
+[13:27:22] [Server thread/INFO]: B7 left the game.
+[13:27:28] [Thread-18/INFO]: UUID of player A8 is 79c72100-753c-3c03-96cf-ebf080845076
+[13:27:28] [Server thread/INFO]: A8[/127.0.0.1:37512] logged in with entity id 70 at ([world]-527.5, 4.0, -281.5)
+[13:27:30] [Thread-19/INFO]: UUID of player B8 is e2e6e792-b019-3d49-b3c4-2e5c6412d8f0
+[13:27:30] [Server thread/INFO]: B8[/127.0.0.1:37520] logged in with entity id 71 at ([world]-527.5, 4.0, -281.5)
+[13:27:47] [Server thread/INFO]: A8 lost connection: Disconnected
+[13:27:47] [Server thread/INFO]: A8 left the game.
+[13:27:47] [Server thread/INFO]: B8 lost connection: Disconnected
+[13:27:47] [Server thread/INFO]: B8 left the game.
+[13:27:52] [Thread-20/INFO]: UUID of player A9 is 1e92555c-b87a-3d3b-ae28-99cd8f250886
+[13:27:53] [Server thread/INFO]: A9[/127.0.0.1:44824] logged in with entity id 88 at ([world]-527.5, 4.0, -281.5)
+[13:27:55] [Thread-21/INFO]: UUID of player B9 is 09df2d62-f0a1-3040-94fe-df5ba1ab23cc
+[13:27:55] [Server thread/INFO]: B9[/127.0.0.1:44832] logged in with entity id 89 at ([world]-527.5, 4.0, -281.5)
+[13:28:12] [Server thread/INFO]: A9 lost connection: Disconnected
+[13:28:12] [Server thread/INFO]: A9 left the game.
+[13:28:12] [Server thread/INFO]: B9 lost connection: Disconnected
+[13:28:12] [Server thread/INFO]: B9 left the game.
+[13:28:17] [Thread-22/INFO]: UUID of player A10 is 5f5df524-48d0-3551-b2c9-6f4098061549
+[13:28:17] [Server thread/INFO]: A10[/127.0.0.1:39182] logged in with entity id 108 at ([world]-527.5, 4.0, -281.5)
+[13:28:19] [Thread-23/INFO]: UUID of player B10 is fac4dbde-feb6-3a13-8c3e-5ae7bda214a6
+[13:28:20] [Server thread/INFO]: B10[/127.0.0.1:39196] logged in with entity id 109 at ([world]-527.5, 4.0, -281.5)
+[13:28:37] [Server thread/INFO]: A10 lost connection: Disconnected
+[13:28:37] [Server thread/INFO]: A10 left the game.
+[13:28:37] [Server thread/INFO]: B10 lost connection: Disconnected
+[13:28:37] [Server thread/INFO]: B10 left the game.
+[13:28:42] [Thread-24/INFO]: UUID of player A11 is da49a80c-e401-34f1-9a35-0688a3555a61
+[13:28:42] [Server thread/INFO]: A11[/127.0.0.1:54842] logged in with entity id 130 at ([world]-527.5, 4.0, -281.5)
+[13:28:44] [Thread-25/INFO]: UUID of player B11 is ee065405-d7b5-3d65-b9dd-017dd026dc02
+[13:28:44] [Server thread/INFO]: B11[/127.0.0.1:54844] logged in with entity id 131 at ([world]-527.5, 4.0, -281.5)
+[13:29:02] [Server thread/INFO]: A11 lost connection: Disconnected
+[13:29:02] [Server thread/INFO]: A11 left the game.
+[13:29:02] [Server thread/INFO]: B11 lost connection: Disconnected
+[13:29:02] [Server thread/INFO]: B11 left the game.
+[13:29:07] [Thread-26/INFO]: UUID of player A12 is da5d4a2e-7420-3a3a-b000-f87032323df3
+[13:29:07] [Server thread/INFO]: A12[/127.0.0.1:37824] logged in with entity id 154 at ([world]-527.5, 4.0, -281.5)
+[13:29:09] [Thread-27/INFO]: UUID of player B12 is c9de00ff-2901-367f-9de5-1ec6f41094c9
+[13:29:09] [Server thread/INFO]: B12[/127.0.0.1:37826] logged in with entity id 155 at ([world]-527.5, 4.0, -281.5)
+[13:29:27] [Server thread/INFO]: A12 lost connection: Disconnected
+[13:29:27] [Server thread/INFO]: A12 left the game.
+[13:29:27] [Server thread/INFO]: B12 lost connection: Disconnected
+[13:29:27] [Server thread/INFO]: B12 left the game.
+[13:29:32] [Thread-28/INFO]: UUID of player A13 is 5dd46fa2-0329-3e18-86a9-8caf4a50cea0
+[13:29:32] [Server thread/INFO]: A13[/127.0.0.1:39930] logged in with entity id 180 at ([world]-527.5, 4.0, -281.5)
+[13:29:34] [Thread-29/INFO]: UUID of player B13 is aa2bcc69-f752-3b03-8788-6fd64d8f26a0
+[13:29:34] [Server thread/INFO]: B13[/127.0.0.1:39944] logged in with entity id 181 at ([world]-527.5, 4.0, -281.5)
+[13:29:52] [Server thread/INFO]: A13 lost connection: Disconnected
+[13:29:52] [Server thread/INFO]: A13 left the game.
+[13:29:52] [Server thread/INFO]: B13 lost connection: Disconnected
+[13:29:52] [Server thread/INFO]: B13 left the game.
+[13:29:57] [Thread-30/INFO]: UUID of player A14 is d607ca21-bbff-3c1e-8d3c-d32d76e86693
+[13:29:57] [Server thread/INFO]: A14[/127.0.0.1:43092] logged in with entity id 208 at ([world]-527.5, 4.0, -281.5)
+[13:29:59] [Thread-31/INFO]: UUID of player B14 is 132af675-edc8-32cf-adc7-210f913ec596
+[13:29:59] [Server thread/INFO]: B14[/127.0.0.1:43108] logged in with entity id 209 at ([world]-527.5, 4.0, -281.5)
+[13:30:17] [Server thread/INFO]: A14 lost connection: Disconnected
+[13:30:17] [Server thread/INFO]: A14 left the game.
+[13:30:17] [Server thread/INFO]: B14 lost connection: Disconnected
+[13:30:17] [Server thread/INFO]: B14 left the game.
+[13:30:22] [Thread-32/INFO]: UUID of player A15 is 59ea5b4d-a74d-31c4-9821-453fc59db4a6
+[13:30:22] [Server thread/INFO]: A15[/127.0.0.1:49286] logged in with entity id 238 at ([world]-527.5, 4.0, -281.5)
+[13:30:24] [Thread-33/INFO]: UUID of player B15 is 7deaa6d6-e994-3537-a046-fcd6f42edf5a
+[13:30:24] [Server thread/INFO]: B15[/127.0.0.1:49288] logged in with entity id 239 at ([world]-527.5, 4.0, -281.5)
+[13:30:42] [Server thread/INFO]: A15 lost connection: Disconnected
+[13:30:42] [Server thread/INFO]: A15 left the game.
+[13:30:42] [Server thread/INFO]: B15 lost connection: Disconnected
+[13:30:42] [Server thread/INFO]: B15 left the game.
+[13:30:47] [Thread-34/INFO]: UUID of player A16 is 02e3d083-d0b4-3f1b-a9f0-66c69a8dac88
+[13:30:47] [Server thread/INFO]: A16[/127.0.0.1:51706] logged in with entity id 270 at ([world]-527.5, 4.0, -281.5)
+[13:30:49] [Thread-35/INFO]: UUID of player B16 is 5ccd416b-1b68-31ff-afaa-775f4177c6f9
+[13:30:49] [Server thread/INFO]: B16[/127.0.0.1:51718] logged in with entity id 271 at ([world]-527.5, 4.0, -281.5)
+[13:31:07] [Server thread/INFO]: A16 lost connection: Disconnected
+[13:31:07] [Server thread/INFO]: A16 left the game.
+[13:31:07] [Server thread/INFO]: B16 lost connection: Disconnected
+[13:31:07] [Server thread/INFO]: B16 left the game.
+[13:31:12] [Thread-36/INFO]: UUID of player A17 is 64016ad5-c64f-3423-8cc1-12becda7dea2
+[13:31:12] [Server thread/INFO]: A17[/127.0.0.1:49126] logged in with entity id 304 at ([world]-527.5, 4.0, -281.5)
+[13:31:14] [Thread-37/INFO]: UUID of player B17 is 2fdf8892-decf-3346-a073-19d9127b86c7
+[13:31:14] [Server thread/INFO]: B17[/127.0.0.1:49140] logged in with entity id 305 at ([world]-527.5, 4.0, -281.5)
+[13:31:31] [Server thread/INFO]: A17 lost connection: Disconnected
+[13:31:31] [Server thread/INFO]: A17 left the game.
+[13:31:31] [Server thread/INFO]: B17 lost connection: Disconnected
+[13:31:31] [Server thread/INFO]: B17 left the game.
+[13:31:37] [Thread-38/INFO]: UUID of player A18 is 3e95e5c3-a728-3ec5-8c4b-8b36783c68da
+[13:31:37] [Server thread/INFO]: A18[/127.0.0.1:37110] logged in with entity id 340 at ([world]-527.5, 4.0, -281.5)
+[13:31:39] [Thread-39/INFO]: UUID of player B18 is 557edb8f-fd88-3b0d-a94f-a5d7a67fec06
+[13:31:39] [Server thread/INFO]: B18[/127.0.0.1:37120] logged in with entity id 341 at ([world]-527.5, 4.0, -281.5)
+[13:31:56] [Server thread/INFO]: A18 lost connection: Disconnected
+[13:31:56] [Server thread/INFO]: A18 left the game.
+[13:31:56] [Server thread/INFO]: B18 lost connection: Disconnected
+[13:31:56] [Server thread/INFO]: B18 left the game.
+[13:32:01] [Thread-40/INFO]: UUID of player A19 is c4551c07-130c-3dc2-a3e7-2271d825046b
+[13:32:01] [Server thread/INFO]: A19[/127.0.0.1:41898] logged in with entity id 378 at ([world]-527.5, 4.0, -281.5)
+[13:32:04] [Thread-41/INFO]: UUID of player B19 is a7832c3b-750a-3d19-88dd-b19fd7092bf9
+[13:32:04] [Server thread/INFO]: B19[/127.0.0.1:41908] logged in with entity id 379 at ([world]-527.5, 4.0, -281.5)
+[13:32:21] [Server thread/INFO]: A19 lost connection: Disconnected
+[13:32:21] [Server thread/INFO]: A19 left the game.
+[13:32:21] [Server thread/INFO]: B19 lost connection: Disconnected
+[13:32:21] [Server thread/INFO]: B19 left the game.
+[13:32:26] [Thread-42/INFO]: UUID of player A20 is 04be43c4-2a69-31fc-8ca6-96c3be100838
+[13:32:26] [Server thread/INFO]: A20[/127.0.0.1:48242] logged in with entity id 418 at ([world]-527.5, 4.0, -281.5)
+[13:32:28] [Thread-43/INFO]: UUID of player B20 is d9c0e246-787a-3529-8a4e-dabd93bb29c3
+[13:32:28] [Server thread/INFO]: B20[/127.0.0.1:48256] logged in with entity id 419 at ([world]-527.5, 4.0, -281.5)
+[13:32:46] [Server thread/INFO]: A20 lost connection: Disconnected
+[13:32:46] [Server thread/INFO]: A20 left the game.
+[13:32:46] [Server thread/INFO]: B20 lost connection: Disconnected
+[13:32:46] [Server thread/INFO]: B20 left the game.
+[13:32:51] [Thread-44/INFO]: UUID of player A21 is 3f6c1cd1-f406-3a53-a426-a34529c4a410
+[13:32:51] [Server thread/INFO]: A21[/127.0.0.1:57688] logged in with entity id 460 at ([world]-527.5, 4.0, -281.5)
+[13:32:53] [Thread-45/INFO]: UUID of player B21 is d77eceb3-7f25-330d-bc46-1d621399522d
+[13:32:53] [Server thread/INFO]: B21[/127.0.0.1:57692] logged in with entity id 461 at ([world]-527.5, 4.0, -281.5)
+[13:33:11] [Server thread/INFO]: A21 lost connection: Disconnected
+[13:33:11] [Server thread/INFO]: A21 left the game.
+[13:33:11] [Server thread/INFO]: B21 lost connection: Disconnected
+[13:33:11] [Server thread/INFO]: B21 left the game.
+[13:33:16] [Thread-46/INFO]: UUID of player A22 is 58ce4666-89c1-3de1-9cfe-d33373cdbe58
+[13:33:16] [Server thread/INFO]: A22[/127.0.0.1:35022] logged in with entity id 504 at ([world]-527.5, 4.0, -281.5)
+[13:33:18] [Thread-47/INFO]: UUID of player B22 is e4550924-c67d-3e1f-acce-3bc838910f38
+[13:33:18] [Server thread/INFO]: B22[/127.0.0.1:35036] logged in with entity id 505 at ([world]-527.5, 4.0, -281.5)
+[13:33:36] [Server thread/INFO]: A22 lost connection: Disconnected
+[13:33:36] [Server thread/INFO]: A22 left the game.
+[13:33:36] [Server thread/INFO]: B22 lost connection: Disconnected
+[13:33:36] [Server thread/INFO]: B22 left the game.
+[13:33:41] [Thread-48/INFO]: UUID of player A23 is e1abc953-600e-3648-9dab-97b7a7499178
+[13:33:41] [Server thread/INFO]: A23[/127.0.0.1:34908] logged in with entity id 550 at ([world]-527.5, 4.0, -281.5)
+[13:33:43] [Thread-49/INFO]: UUID of player B23 is 58890aaa-a042-3577-8276-b21b4d8ec988
+[13:33:43] [Server thread/INFO]: B23[/127.0.0.1:34924] logged in with entity id 551 at ([world]-527.5, 4.0, -281.5)
+[13:34:01] [Server thread/INFO]: A23 lost connection: Disconnected
+[13:34:01] [Server thread/INFO]: A23 left the game.
+[13:34:01] [Server thread/INFO]: B23 lost connection: Disconnected
+[13:34:01] [Server thread/INFO]: B23 left the game.
+[13:34:06] [Thread-50/INFO]: UUID of player A24 is a7b43d4f-67a0-3051-bfe9-8fb147b1d266
+[13:34:06] [Server thread/INFO]: A24[/127.0.0.1:59368] logged in with entity id 598 at ([world]-527.5, 4.0, -281.5)
+[13:34:08] [Thread-51/INFO]: UUID of player B24 is 395a838d-97b0-3e3b-9aaa-db100c08f636
+[13:34:08] [Server thread/INFO]: B24[/127.0.0.1:59376] logged in with entity id 599 at ([world]-527.5, 4.0, -281.5)
+[13:34:26] [Server thread/INFO]: A24 lost connection: Disconnected
+[13:34:26] [Server thread/INFO]: A24 left the game.
+[13:34:26] [Server thread/INFO]: B24 lost connection: Disconnected
+[13:34:26] [Server thread/INFO]: B24 left the game.
+[13:34:31] [Thread-52/INFO]: UUID of player A25 is ae5a5d2e-c33b-3c0c-8b69-24a5013ada83
+[13:34:31] [Server thread/INFO]: A25[/127.0.0.1:44790] logged in with entity id 648 at ([world]-527.5, 4.0, -281.5)
+[13:34:33] [Thread-53/INFO]: UUID of player B25 is 1d19c579-9d80-335b-8dce-8daa26c6ed65
+[13:34:33] [Server thread/INFO]: B25[/127.0.0.1:44802] logged in with entity id 649 at ([world]-527.5, 4.0, -281.5)
+[13:34:51] [Server thread/INFO]: A25 lost connection: Disconnected
+[13:34:51] [Server thread/INFO]: A25 left the game.
+[13:34:51] [Server thread/INFO]: B25 lost connection: Disconnected
+[13:34:51] [Server thread/INFO]: B25 left the game.
+[13:34:56] [Thread-54/INFO]: UUID of player A26 is 09a752b2-19fe-33b3-9f2d-313e338ef9d1
+[13:34:56] [Server thread/INFO]: A26[/127.0.0.1:51242] logged in with entity id 700 at ([world]-527.5, 4.0, -281.5)
+[13:34:58] [Thread-55/INFO]: UUID of player B26 is b0438fba-4fdd-349e-942e-4ecdef86c97e
+[13:34:58] [Server thread/INFO]: B26[/127.0.0.1:51248] logged in with entity id 701 at ([world]-527.5, 4.0, -281.5)
+[13:35:15] [Server thread/INFO]: A26 lost connection: Disconnected
+[13:35:15] [Server thread/INFO]: A26 left the game.
+[13:35:15] [Server thread/INFO]: B26 lost connection: Disconnected
+[13:35:15] [Server thread/INFO]: B26 left the game.
+[13:35:21] [Thread-56/INFO]: UUID of player A27 is 5d2bd30f-4118-3c1e-8621-be637a97b345
+[13:35:21] [Server thread/INFO]: A27[/127.0.0.1:41792] logged in with entity id 754 at ([world]-527.5, 4.0, -281.5)
+[13:35:23] [Thread-57/INFO]: UUID of player B27 is 3c17a814-e24a-3a95-a7f9-8ba52cdf791d
+[13:35:23] [Server thread/INFO]: B27[/127.0.0.1:41794] logged in with entity id 755 at ([world]-527.5, 4.0, -281.5)
+[13:35:40] [Server thread/INFO]: A27 lost connection: Disconnected
+[13:35:40] [Server thread/INFO]: A27 left the game.
+[13:35:40] [Server thread/INFO]: B27 lost connection: Disconnected
+[13:35:40] [Server thread/INFO]: B27 left the game.
+[13:35:45] [Thread-58/INFO]: UUID of player A28 is eb7ded4a-3610-332d-9cd1-a85bc182969c
+[13:35:46] [Server thread/INFO]: A28[/127.0.0.1:45638] logged in with entity id 810 at ([world]-527.5, 4.0, -281.5)
+[13:35:48] [Thread-59/INFO]: UUID of player B28 is 7737f451-bbd1-34c3-aa60-19bb43e4f4e0
+[13:35:48] [Server thread/INFO]: B28[/127.0.0.1:45644] logged in with entity id 811 at ([world]-527.5, 4.0, -281.5)
+[13:36:05] [Server thread/INFO]: A28 lost connection: Disconnected
+[13:36:05] [Server thread/INFO]: A28 left the game.
+[13:36:05] [Server thread/INFO]: B28 lost connection: Disconnected
+[13:36:05] [Server thread/INFO]: B28 left the game.
+[13:36:10] [Thread-60/INFO]: UUID of player A29 is 151ae5d5-5a72-3aca-829d-9e28c68f2541
+[13:36:10] [Server thread/INFO]: A29[/127.0.0.1:47906] logged in with entity id 868 at ([world]-527.5, 4.0, -281.5)
+[13:36:12] [Thread-61/INFO]: UUID of player B29 is 2c03f544-572e-3433-a894-164a7833427f
+[13:36:13] [Server thread/INFO]: B29[/127.0.0.1:47914] logged in with entity id 869 at ([world]-527.5, 4.0, -281.5)
+[13:36:30] [Server thread/INFO]: A29 lost connection: Disconnected
+[13:36:30] [Server thread/INFO]: A29 left the game.
+[13:36:30] [Server thread/INFO]: B29 lost connection: Disconnected
+[13:36:30] [Server thread/INFO]: B29 left the game.
+[13:36:35] [Thread-62/INFO]: UUID of player A30 is d6873cb8-dd35-37ed-b8a4-d973c878392d
+[13:36:35] [Server thread/INFO]: A30[/127.0.0.1:50782] logged in with entity id 928 at ([world]-527.5, 4.0, -281.5)
+[13:36:37] [Thread-63/INFO]: UUID of player B30 is 8fb258ba-3402-3cc1-95f7-f3f6fff4d5c7
+[13:36:37] [Server thread/INFO]: B30[/127.0.0.1:47378] logged in with entity id 929 at ([world]-527.5, 4.0, -281.5)
+[13:36:55] [Server thread/INFO]: A30 lost connection: Disconnected
+[13:36:55] [Server thread/INFO]: A30 left the game.
+[13:36:55] [Server thread/INFO]: B30 lost connection: Disconnected
+[13:36:55] [Server thread/INFO]: B30 left the game.
+[13:37:00] [Thread-64/INFO]: UUID of player A31 is c83cbc64-a534-3124-ad0b-1577a7ebada1
+[13:37:00] [Server thread/INFO]: A31[/127.0.0.1:52224] logged in with entity id 990 at ([world]-527.5, 4.0, -281.5)
+[13:37:02] [Thread-65/INFO]: UUID of player B31 is 619bdf1a-4de1-3c95-9eca-a4cb1e63b18c
+[13:37:02] [Server thread/INFO]: B31[/127.0.0.1:52232] logged in with entity id 991 at ([world]-527.5, 4.0, -281.5)
+[13:37:20] [Server thread/INFO]: A31 lost connection: Disconnected
+[13:37:20] [Server thread/INFO]: A31 left the game.
+[13:37:20] [Server thread/INFO]: B31 lost connection: Disconnected
+[13:37:20] [Server thread/INFO]: B31 left the game.
+[13:37:25] [Thread-66/INFO]: UUID of player A32 is ab4ee1c9-891f-343f-8344-78d31cc55bd1
+[13:37:25] [Server thread/INFO]: A32[/127.0.0.1:51872] logged in with entity id 1054 at ([world]-527.5, 4.0, -281.5)
+[13:37:27] [Thread-67/INFO]: UUID of player B32 is 1521e766-b9e0-38bf-8590-5da5aada19e3
+[13:37:27] [Server thread/INFO]: B32[/127.0.0.1:40594] logged in with entity id 1055 at ([world]-527.5, 4.0, -281.5)
+[13:37:45] [Server thread/INFO]: A32 lost connection: Disconnected
+[13:37:45] [Server thread/INFO]: A32 left the game.
+[13:37:45] [Server thread/INFO]: B32 lost connection: Disconnected
+[13:37:45] [Server thread/INFO]: B32 left the game.
+[13:37:50] [Thread-68/INFO]: UUID of player A33 is ea7633e6-fbc8-368d-af56-657a19b2ab25
+[13:37:50] [Server thread/INFO]: A33[/127.0.0.1:54310] logged in with entity id 1120 at ([world]-527.5, 4.0, -281.5)
+[13:37:52] [Thread-69/INFO]: UUID of player B33 is bf5c2984-baf4-339d-9b39-20a914c989f5
+[13:37:52] [Server thread/INFO]: B33[/127.0.0.1:54320] logged in with entity id 1121 at ([world]-527.5, 4.0, -281.5)
+[13:38:10] [Server thread/INFO]: A33 lost connection: Disconnected
+[13:38:10] [Server thread/INFO]: A33 left the game.
+[13:38:10] [Server thread/INFO]: B33 lost connection: Disconnected
+[13:38:10] [Server thread/INFO]: B33 left the game.
+[13:38:15] [Thread-70/INFO]: UUID of player A34 is 79c7400e-8f0d-338b-a68a-599c7f5e3763
+[13:38:15] [Server thread/INFO]: A34[/127.0.0.1:51162] logged in with entity id 1188 at ([world]-527.5, 4.0, -281.5)
+[13:38:17] [Thread-71/INFO]: UUID of player B34 is dc1bae38-b657-3645-a8a7-be036f440796
+[13:38:17] [Server thread/INFO]: B34[/127.0.0.1:57532] logged in with entity id 1189 at ([world]-527.5, 4.0, -281.5)
+[13:38:35] [Server thread/INFO]: A34 lost connection: Disconnected
+[13:38:35] [Server thread/INFO]: A34 left the game.
+[13:38:35] [Server thread/INFO]: B34 lost connection: Disconnected
+[13:38:35] [Server thread/INFO]: B34 left the game.
+[13:38:40] [Thread-72/INFO]: UUID of player A35 is b757fdc7-bebe-388c-9c51-c2e831aa0744
+[13:38:40] [Server thread/INFO]: A35[/127.0.0.1:45192] logged in with entity id 1258 at ([world]-527.5, 4.0, -281.5)
+[13:38:42] [Thread-73/INFO]: UUID of player B35 is 3e8abd88-7a5c-38f0-b46c-a028f8512f6d
+[13:38:42] [Server thread/INFO]: B35[/127.0.0.1:45200] logged in with entity id 1259 at ([world]-527.5, 4.0, -281.5)
+[13:39:00] [Server thread/INFO]: A35 lost connection: Disconnected
+[13:39:00] [Server thread/INFO]: A35 left the game.
+[13:39:00] [Server thread/INFO]: B35 lost connection: Disconnected
+[13:39:00] [Server thread/INFO]: B35 left the game.
+[13:39:05] [Thread-74/INFO]: UUID of player A36 is 22d6ded8-35f2-3b72-8842-f59faad54928
+[13:39:05] [Server thread/INFO]: A36[/127.0.0.1:32792] logged in with entity id 1330 at ([world]-527.5, 4.0, -281.5)
+[13:39:07] [Thread-75/INFO]: UUID of player B36 is 29c520a8-e6a7-35da-9468-578ad85e8fac
+[13:39:07] [Server thread/INFO]: B36[/127.0.0.1:58246] logged in with entity id 1331 at ([world]-527.5, 4.0, -281.5)
+[13:39:24] [Thread-1/INFO]: Stopping server
+[13:39:24] [Thread-1/INFO]: Saving players

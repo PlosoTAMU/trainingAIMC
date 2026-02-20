@@ -1,0 +1,23 @@
+settings:
+  allow-end: false
+  warn-on-overload: false
+  permissions-file: permissions.yml
+  update-folder: update
+  plugin-profiling: false
+  connection-throttle: -1
+  query-plugins: false
+  deprecated-verbose: false
+  shutdown-message: Server closed
+spawn-limits:
+  monsters: 0
+  animals: 0
+  water-animals: 0
+  ambient: 0
+chunk-gc:
+  period-in-ticks: 9999
+  load-threshold: 0
+ticks-per:
+  animal-spawns: 99999
+  monster-spawns: 99999
+  autosave: -1
+aliases: now-in-commands.yml

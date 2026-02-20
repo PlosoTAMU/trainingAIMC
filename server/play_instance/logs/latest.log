@@ -1,0 +1,49 @@
+[13:57:13] [Server thread/INFO]: Starting minecraft server version 1.8.8
+[13:57:13] [Server thread/INFO]: Loading properties
+[13:57:13] [Server thread/INFO]: Default game type: SURVIVAL
+[13:57:13] [Server thread/INFO]: This server is running CraftBukkit version git-Spigot-21fe707-741a1bd (MC: 1.8.8) (Implementing API version 1.8.8-R0.1-SNAPSHOT)
+[13:57:13] [Server thread/INFO]: Debug logging is disabled
+[13:57:13] [Server thread/INFO]: Server Ping Player Sample Count: 12
+
+[13:57:13] [Server thread/INFO]: Using 2 threads for Netty based IO
+[13:57:13] [Server thread/INFO]: Generating keypair
+[13:57:13] [Server thread/INFO]: Starting Minecraft server on *:25565
+[13:57:13] [Server thread/INFO]: Your platform does not provide complete low-level API for accessing direct buffers reliably. Unless explicitly requested, heap buffer will always be preferred to avoid potential system unstability.
+[13:57:13] [Server thread/INFO]: Using default channel type
+[13:57:13] [Server thread/WARN]: **** SERVER IS RUNNING IN OFFLINE/INSECURE MODE!
+[13:57:13] [Server thread/WARN]: The server will make no attempt to authenticate usernames. Beware.
+[13:57:13] [Server thread/WARN]: While this makes the game possible to play without internet access, it also opens up the ability for hackers to connect with any username they choose.
+[13:57:13] [Server thread/WARN]: To change this, set "online-mode" to "true" in the server.properties file.
+[13:57:13] [Server thread/INFO]: **** Beginning UUID conversion, this may take A LONG time ****
+[13:57:13] [Server thread/INFO]: Preparing level "world"
+[13:57:14] [Server thread/INFO]: Preparing start region for level 0 (Seed: -3595578876154869702)
+[13:57:15] [Server thread/INFO]: Preparing start region for level 1 (Seed: -3595578876154869702)
+[13:57:16] [Server thread/INFO]: Preparing spawn area: 13%
+[13:57:17] [Server thread/INFO]: Preparing spawn area: 28%
+[13:57:18] [Server thread/INFO]: Preparing spawn area: 59%
+[13:57:19] [Server thread/INFO]: Preparing spawn area: 96%
+[13:57:19] [Server thread/INFO]: Server permissions file permissions.yml is empty, ignoring it
+[13:57:19] [Server thread/INFO]: Done (5.493s)! For help, type "help" or "?"
+[13:57:19] [Server thread/INFO]: Starting remote control listener
+[13:57:19] [RCON Listener #1/INFO]: RCON running on 0.0.0.0:25576
+[13:57:20] [RCON Listener #1/INFO]: Rcon connection from: /127.0.0.1
+[13:57:20] [Server thread/INFO]: [Rcon: Game rule has been updated]
+[13:57:20] [Server thread/INFO]: [Rcon: Game rule has been updated]
+[13:57:20] [Server thread/INFO]: [Rcon: Game rule has been updated]
+[13:57:20] [Server thread/INFO]: [Rcon: Game rule has been updated]
+[13:57:20] [Server thread/INFO]: [Rcon: Game rule has been updated]
+[13:57:20] [Server thread/INFO]: [Rcon: Game rule has been updated]
+[13:57:28] [Thread-4/INFO]: UUID of player Ploso is e039c961-3e1e-3c43-9fe5-1b1b7b216675
+[13:57:29] [Server thread/INFO]: Ploso[/10.245.140.3:49216] logged in with entity id 3 at ([world]-2.5, -1.0, -3.5)
+[13:57:30] [Thread-5/INFO]: UUID of player PvP_AI is 92960fe7-e663-3f6e-afc6-499003b74ef0
+[13:57:30] [Server thread/INFO]: PvP_AI[/127.0.0.1:35208] logged in with entity id 5 at ([world]-9.5, 4.0, -4.5)
+[13:57:55] [Server thread/INFO]: Ploso issued server command: /gamemode 1
+[13:57:56] [Server thread/INFO]: Ploso has just earned the achievement [Taking Inventory]
+[13:58:01] [Server thread/INFO]: Ploso issued server command: /setblock ~ ~ ~ stone
+[13:58:08] [Server thread/INFO]: Ploso issued server command: /setblock ~ ~ ~ stone
+[13:58:12] [Async Chat Thread - #0/INFO]: <Ploso> s
+
+[13:58:13] [Async Chat Thread - #0/INFO]: <Ploso> s
+
+[13:58:35] [Thread-1/INFO]: Stopping server
+[13:58:35] [Thread-1/INFO]: Saving players
