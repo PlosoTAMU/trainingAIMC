@@ -1,5 +1,4 @@
 // src/server_manager.js
-// Manages single PaperMC server process
 
 const { spawn } = require('child_process');
 const path = require('path');
@@ -91,13 +90,12 @@ class ServerManager {
       this._serverProperties());
     await fs.writeFile(path.join(this.serverDir, 'eula.txt'), 'eula=true\n');
 
-    await this._writePaperConfig();
     await this._writeSpigotConfig();
     await this._writeBukkitConfig();
   }
 
   _serverProperties() {
-    const maxPlayers = cfg.TRAINING.PARALLEL_ZONES * 2 + 10;
+    const maxPlayers = 10;
     return [
       `server-port=${this.port}`,
       `server-ip=${this.bindHost === '0.0.0.0' ? '' : this.bindHost}`,
@@ -119,50 +117,12 @@ class ServerManager {
       `level-name=world`,
       `motd=PvP Training Server`,
       `network-compression-threshold=-1`,
-      `connection-throttle=-1`,
       `use-native-transport=true`,
       `enable-command-block=true`,
       `allow-flight=true`,
       `max-tick-time=-1`,
-      `max-world-size=1000`,
+      `connection-throttle=0`,
     ].join('\n');
-  }
-
-  async _writePaperConfig() {
-    const config = `
-world-settings:
-  default:
-    optimize-explosions: true
-    game-mechanics:
-      disable-chest-cat-detection: true
-      disable-player-crits: false
-      disable-sprint-interruption-on-attack: false
-    max-auto-save-chunks-per-tick: 0
-    prevent-moving-into-unloaded-chunks: false
-    entity-per-chunk-save-limit:
-      experience_orb: 0
-      snowball: 0
-      ender_pearl: 0
-      arrow: 0
-    chunks:
-      auto-save-interval: -1
-settings:
-  async-chunks:
-    enable: true
-    threads: -1
-  chunk-tasks-per-tick: 1000
-  incoming-packet-spam-threshold: 9999
-  save-player-data: false
-  use-alternative-luck-formula: false
-  console:
-    enable-brigadier-highlighting: false
-    enable-brigadier-completions: false
-  watchdog:
-    early-warning-every: -1
-    early-warning-delay: -1
-`.trimStart();
-    await fs.ensureDir(path.join(this.serverDir, 'config'));
-    await fs.writeFile(path.join(this.serverDir, 'paper.yml'), config);
   }
 
   async _writeSpigotConfig() {
@@ -171,6 +131,9 @@ settings:
   save-user-cache-on-stop-only: true
   moved-wrongly-threshold: 100.0
   moved-too-quickly-multiplier: 100.0
+  connection-throttle: -1
+  timeout-time: 300
+  player-shuffle: 0
 world-settings:
   default:
     mob-spawn-range: 0
@@ -179,7 +142,7 @@ world-settings:
       monsters: 0
       misc: 0
     entity-tracking-range:
-      players: 32
+      players: 48
       animals: 0
       monsters: 0
       misc: 0
@@ -202,7 +165,8 @@ settings:
   warn-on-overload: false
   plugin-profiling: false
   connection-throttle: -1
-  query.plugins: false
+  query-plugins: false
+  shutdown-message: Server closed
 spawn-limits:
   monsters: 0
   animals: 0
@@ -227,22 +191,22 @@ ticks-per:
 
     this._stdout = '';
     this._stderr = '';
-    
-    this.process.stdout.on('data', d => { 
+
+    this.process.stdout.on('data', d => {
       this._stdout += d.toString();
-      console.log('[Server]', d.toString().trim());
+      // Uncomment for debugging:
+      // console.log('[Server]', d.toString().trim());
     });
-    
+
     this.process.stderr.on('data', d => {
       this._stderr += d.toString();
-      console.error('[Server ERR]', d.toString().trim());
+      // Uncomment for debugging:
+      // console.error('[Server ERR]', d.toString().trim());
     });
 
     this.process.on('exit', code => {
       if (this.ready) {
-        console.error(`[Server] Process exited (code ${code})`);
-        console.error('[Server] Last stdout:', this._stdout.slice(-500));
-        console.error('[Server] Last stderr:', this._stderr.slice(-500));
+        console.error(`[Server] Process exited unexpectedly (code ${code})`);
         this.ready = false;
       }
     });
@@ -251,7 +215,7 @@ ticks-per:
   async _waitForReady() {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(
-        () => reject(new Error('Server start timeout (90s)')), 90_000);
+        () => reject(new Error('Server start timeout (120s)')), 120000);
 
       const check = setInterval(() => {
         if (this._stdout.includes('Done') || this._stdout.includes('For help')) {
@@ -259,7 +223,7 @@ ticks-per:
           clearInterval(check);
           resolve();
         }
-      }, 250);
+      }, 500);
 
       this.process.on('exit', () => {
         clearTimeout(timeout);
@@ -270,12 +234,12 @@ ticks-per:
   }
 
   async _connectRcon() {
-    await sleep(800);
+    await sleep(1000);
     this.rcon = new Rcon({
       host: '127.0.0.1',
       port: this.rconPort,
       password: cfg.RCON_PASSWORD,
-      timeout: 5000,
+      timeout: 10000,
     });
     await this.rcon.connect();
   }
@@ -302,7 +266,7 @@ ticks-per:
     const ox = zoneId * cfg.ZONE.SPACING;
     return { x: ox + 0.5, y: cfg.ZONE.FLOOR_Y, z: 0.5, yaw: 90 };
   }
-  
+
   static zoneSpawnB(zoneId) {
     const ox = zoneId * cfg.ZONE.SPACING;
     return { x: ox + cfg.ZONE.FIGHTER_SEP + 0.5, y: cfg.ZONE.FLOOR_Y, z: 0.5, yaw: 270 };

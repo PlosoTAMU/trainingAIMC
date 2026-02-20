@@ -1,5 +1,5 @@
 // src/train.js
-// Genetic algorithm training loop
+// Genetic algorithm training loop - SEQUENTIAL VERSION
 
 const fs = require('fs-extra');
 const path = require('path');
@@ -14,29 +14,20 @@ const nn = require('./neural_net');
 const { TRAINING, BOXING } = cfg;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// Global connection semaphore - only ONE bot can be connecting at any time
-let isConnecting = false;
-let connectionCount = 0;
+// Global state
+let server = null;
+let activeConnections = 0;
 
-async function acquireConnectionLock() {
-  while (isConnecting) {
-    await sleep(200);
-  }
-  isConnecting = true;
-  connectionCount++;
-  console.log(`  [Connection ${connectionCount}] Acquiring lock...`);
-}
-
-function releaseConnectionLock() {
-  isConnecting = false;
-  console.log(`  [Connection ${connectionCount}] Released.`);
-}
 async function main() {
   console.log(chalk.bold.cyan('\n⚔  MC 1.8 PvP AI Trainer  ⚔\n'));
 
-  const server = new ServerManager();
+  server = new ServerManager();
   console.log(chalk.gray('Starting training server...'));
   await server.start();
+
+  // Wait for server to fully stabilize
+  console.log(chalk.gray('Waiting for server to stabilize...'));
+  await sleep(5000);
 
   let generation = 0;
   let population = [];
@@ -58,11 +49,12 @@ async function main() {
     }
   }
 
+  // Main training loop
   while (true) {
     generation++;
     console.log(chalk.bold.magenta(`\n═══ Generation ${generation} ═══\n`));
 
-    const scores = await evaluatePopulation(server, population);
+    const scores = await evaluatePopulation(population);
 
     const ranked = population.map((w, i) => ({ weights: w, score: scores[i] }))
       .sort((a, b) => b.score - a.score);
@@ -70,7 +62,7 @@ async function main() {
     const bestScore = ranked[0].score;
     const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
 
-    console.log(chalk.green(`Best: ${bestScore.toFixed(1)}  Avg: ${avgScore.toFixed(1)}`));
+    console.log(chalk.green(`\nBest: ${bestScore.toFixed(1)}  Avg: ${avgScore.toFixed(1)}`));
 
     if (generation % TRAINING.SAVE_EVERY_N_GENS === 0) {
       await saveGeneration(generation, ranked, bestScore);
@@ -80,101 +72,90 @@ async function main() {
   }
 }
 
-
-async function evaluatePopulation(server, population) {
+async function evaluatePopulation(population) {
   const scores = new Array(population.length).fill(0);
-  
-  // Run fights ONE AT A TIME instead of in parallel
-  console.log(chalk.gray(`  Running ${population.length} fights sequentially...`));
-  
+
+  console.log(chalk.gray(`  Running ${population.length} fights sequentially...\n`));
+
   for (let i = 0; i < population.length; i++) {
-    const idx = i;
     const oppIdx = (i + 1) % population.length;
-    
-    const result = await runFight(server, 0, population[idx], population[oppIdx], idx, oppIdx);
-    
-    scores[result.idx] += result.score;
-    scores[result.oppIdx] += result.oppScore;
-    
-    // Progress indicator
-    if ((i + 1) % 5 === 0) {
-      process.stdout.write(chalk.gray(`\r  Progress: ${i + 1}/${population.length} fights`));
+
+    process.stdout.write(chalk.gray(`  Fight ${i + 1}/${population.length}: Agent ${i} vs ${oppIdx}... `));
+
+    try {
+      const result = await runFight(population[i], population[oppIdx], i, oppIdx);
+      scores[result.idx] += result.score;
+      scores[result.oppIdx] += result.oppScore;
+      console.log(chalk.green(`${result.score}-${result.oppScore}`));
+    } catch (err) {
+      console.log(chalk.red(`FAILED: ${err.message}`));
     }
+
+    // Cooldown between fights
+    await sleep(2000);
   }
-  console.log(''); // newline
-  
+
   return scores;
 }
 
-async function runFight(server, zoneId, weightsA, weightsB, idxA, idxB) {
-  const spawnA = ServerManager.zoneSpawnA(zoneId);
-  const spawnB = ServerManager.zoneSpawnB(zoneId);
+async function runFight(weightsA, weightsB, idxA, idxB) {
+  const spawnA = ServerManager.zoneSpawnA(0);
+  const spawnB = ServerManager.zoneSpawnB(0);
 
-  let botA, botB;
-  
+  let botA = null;
+  let botB = null;
+
   try {
-    // Bot A - acquire lock, wait 3 seconds, connect
-    await acquireConnectionLock();
-    console.log(`    Connecting Bot A${idxA}...`);
-    await sleep(3000); // 3 second delay before connection
-    
+    // Connect bot A
+    await sleep(3000);
     botA = await createBot({
       host: '127.0.0.1',
       port: cfg.SERVER_PORT,
-      username: `A${idxA}`,
+      username: `BotA`,
       weights: weightsA,
       zoneOriginX: 0,
     });
-    
-    releaseConnectionLock();
-    console.log(`    Bot A${idxA} connected ✓`);
-    
-    await sleep(2000); // Wait 2 seconds between bot connections
-    
-    // Bot B - acquire lock, wait 3 seconds, connect
-    await acquireConnectionLock();
-    console.log(`    Connecting Bot B${idxB}...`);
+    activeConnections++;
+
+    // Wait between connections
     await sleep(3000);
-    
+
+    // Connect bot B
     botB = await createBot({
       host: '127.0.0.1',
       port: cfg.SERVER_PORT,
-      username: `B${idxB}`,
+      username: `BotB`,
       weights: weightsB,
       zoneOriginX: 0,
     });
-    
-    releaseConnectionLock();
-    console.log(`    Bot B${idxB} connected ✓`);
-    
-    await sleep(1000); // Let both bots fully spawn
-    
-    // Setup fight
-    console.log(`    Setting up arena...`);
+    activeConnections++;
+
+    // Setup arena
+    await sleep(1000);
     await server.rconBatch([
-      `tp ${botA.bot.username} ${spawnA.x} ${spawnA.y} ${spawnA.z}`,
-      `tp ${botB.bot.username} ${spawnB.x} ${spawnB.y} ${spawnB.z}`,
-      `clear ${botA.bot.username}`,
-      `clear ${botB.bot.username}`,
-      `give ${botA.bot.username} diamond_sword 1 0 {Unbreakable:1}`,
-      `give ${botB.bot.username} diamond_sword 1 0 {Unbreakable:1}`,
-      `effect ${botA.bot.username} instant_health 1 255 true`,
-      `effect ${botB.bot.username} instant_health 1 255 true`,
-      `gamemode 2 ${botA.bot.username}`,
-      `gamemode 2 ${botB.bot.username}`,
+      `tp BotA ${spawnA.x} ${spawnA.y} ${spawnA.z}`,
+      `tp BotB ${spawnB.x} ${spawnB.y} ${spawnB.z}`,
+      `clear BotA`,
+      `clear BotB`,
+      `give BotA diamond_sword 1 0 {Unbreakable:1}`,
+      `give BotB diamond_sword 1 0 {Unbreakable:1}`,
+      `effect BotA instant_health 1 255 true`,
+      `effect BotB instant_health 1 255 true`,
+      `gamemode 2 BotA`,
+      `gamemode 2 BotB`,
     ]);
 
-    console.log(`    Fight starting: A${idxA} vs B${idxB}`);
+    // Start fight
+    await sleep(500);
     botA.startFighting();
     botB.startFighting();
 
-    // Shorter fight for testing
-    await sleep(10000); // 10 seconds
+    // Wait for fight duration
+    await sleep(BOXING.HIT_TIMEOUT_MS);
 
+    // Get results
     const hitsA = botA.getHits().myHits;
     const hitsB = botB.getHits().myHits;
-    
-    console.log(`    Fight complete: A${idxA}=${hitsA} hits, B${idxB}=${hitsB} hits`);
 
     return {
       idx: idxA,
@@ -182,34 +163,26 @@ async function runFight(server, zoneId, weightsA, weightsB, idxA, idxB) {
       score: hitsA,
       oppScore: hitsB,
     };
-    
-  } catch (error) {
-    console.error(`    Fight ${idxA} vs ${idxB} FAILED: ${error.message}`);
-    return {
-      idx: idxA,
-      oppIdx: idxB,
-      score: 0,
-      oppScore: 0,
-    };
+
   } finally {
-    // Cleanup
-    console.log(`    Disconnecting bots...`);
+    // ALWAYS cleanup
     if (botA) {
-      try { 
+      try {
         botA.stopFighting();
-        botA.disconnect(); 
+        botA.disconnect();
+        activeConnections--;
       } catch {}
     }
     if (botB) {
-      try { 
+      try {
         botB.stopFighting();
-        botB.disconnect(); 
+        botB.disconnect();
+        activeConnections--;
       } catch {}
     }
-    
-    // Critical: wait before allowing next connection
-    await sleep(3000);
-    console.log(`    Cooldown complete.\n`);
+
+    // Wait for server to process disconnections
+    await sleep(2000);
   }
 }
 
@@ -281,6 +254,18 @@ async function findLatestWeights() {
 
   return files.length > 0 ? path.join(dir, files[0]) : null;
 }
+
+// Cleanup on exit
+process.on('SIGINT', async () => {
+  console.log(chalk.yellow('\n\nShutting down...'));
+  if (server) await server.stop();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  if (server) await server.stop();
+  process.exit(0);
+});
 
 main().catch(e => {
   console.error(chalk.red('\nFatal:'), e);

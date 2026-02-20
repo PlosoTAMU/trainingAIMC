@@ -2,6 +2,7 @@
 // PvP bot for BOXING match rules
 
 const mineflayer = require('mineflayer');
+const { EventEmitter } = require('events');
 const { NN: nnCfg, ZONE, BOXING, PING } = require('../config');
 const nn = require('./neural_net');
 
@@ -38,175 +39,15 @@ function buildInputs(selfBot, oppEntity, zoneOriginX, myHits, oppHits) {
     norm(selfBot.health, 0, 20),
     selfBot.entity.onGround ? 1 : -1,
     selfBot.entity.sprinting ? 1 : -1,
-
     Math.max(-1, Math.min(1, orX)),
     Math.max(-1, Math.min(1, orZ)),
     Math.max(-1, Math.min(1, opVel.y / 10)),
     oppEntity && oppEntity.health != null ? norm(oppEntity.health, 0, 20) : 1,
     oppEntity && oppEntity.sprinting ? 1 : -1,
     oppEntity && oppEntity.onGround ? 1 : -1,
-
     norm(myHits, 0, BOXING.HITS_TO_WIN),
     norm(oppHits, 0, BOXING.HITS_TO_WIN),
   ];
-}
-
-function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
-  return new Promise((resolve, reject) => {
-    const bot = mineflayer.createBot({
-      host,
-      port,
-      username,
-      version: '1.8.9',
-      auth: 'offline',
-      checkTimeoutInterval: 120000,
-      hideErrors: false,
-      physicsEnabled: true,
-      maxConcurrentTasks: 1,
-    });
-
-    // Timeout for initial connection
-    const connectionTimeout = setTimeout(() => {
-      bot.end();
-      reject(new Error(`${username}: Connection timeout after 30s`));
-    }, 30000);
-
-    bot.on('error', err => {
-      clearTimeout(connectionTimeout);
-      console.error(`[${username}] Error:`, err.message);
-      reject(err);
-    });
-
-    bot.once('spawn', () => {
-      clearTimeout(connectionTimeout);
-      bot.removeListener('error', reject);
-      lastHp = bot.health;
-      resolve(controller);
-    });
-
-    const ping = randomPing();
-    const stats = { hitsLanded: 0, hitsTaken: 0 };
-    const emitter = new (require('events').EventEmitter)();
-
-    let fightInterval = null;
-    let fighting = false;
-    let lastHp = 20;
-    let myHits = 0;
-    let oppHits = 0;
-    let lastAttackTime = 0;
-
-    bot.on('error', reject);
-    bot.on('kicked', reason => {
-      stopFighting();
-      emitter.emit('kicked', reason);
-    });
-
-    bot.on('health', () => {
-      const hp = bot.health;
-      if (hp < lastHp - 0.1) {
-        stats.hitsTaken++;
-        oppHits++;
-        emitter.emit('hitTaken', stats.hitsTaken);
-      }
-      lastHp = hp;
-    });
-
-    bot.on('death', () => {
-      stopFighting();
-      emitter.emit('death');
-    });
-
-    bot.on('entityHurt', entity => {
-      if (!fighting) return;
-      if (entity.type !== 'player') return;
-      if (entity.username === bot.username) return;
-
-      const sinceAttack = Date.now() - lastAttackTime;
-      if (sinceAttack < 400) {
-        stats.hitsLanded++;
-        myHits++;
-        emitter.emit('hitLanded', stats.hitsLanded);
-      }
-    });
-
-    function tick() {
-      if (!fighting) return;
-
-      const oppEntity = bot.nearestEntity(e =>
-        e.type === 'player' &&
-        e.username !== bot.username &&
-        Math.abs(e.position.x - zoneOriginX) < cfg_zone_spacing_half()
-      );
-
-      const inputs = buildInputs(bot, oppEntity, zoneOriginX, myHits, oppHits);
-      const actions = weights ? nn.decide(weights, inputs) : randomActions();
-      const [fwd, back, left, right, jump, attack] = actions;
-
-      const moving = fwd || back || left || right;
-
-      withPing(ping, () => {
-        if (!fighting) return;
-        bot.setControlState('forward', fwd && !back);
-        bot.setControlState('back',    back && !fwd);
-        bot.setControlState('left',    left && !right);
-        bot.setControlState('right',   right && !left);
-        bot.setControlState('sprint',  moving);
-        bot.setControlState('jump',    jump);
-      });
-
-      if (attack && oppEntity) {
-        const dist = bot.entity.position.distanceTo(oppEntity.position);
-        if (dist < 4.5) {
-          withPing(ping, () => {
-            if (!fighting) return;
-            lastAttackTime = Date.now() + ping;
-            bot.lookAt(oppEntity.position.offset(0, 1.62, 0), true);
-            bot.attack(oppEntity);
-          });
-        }
-      }
-    }
-
-    function startFighting() {
-      if (fightInterval) return;
-      fighting = true;
-      fightInterval = setInterval(tick, DECISION_INTERVAL_MS);
-    }
-
-    function stopFighting() {
-      if (!fightInterval) return;
-      clearInterval(fightInterval);
-      fightInterval = null;
-      fighting = false;
-      for (const c of ['forward','back','left','right','sprint','jump','sneak']) {
-        try { bot.setControlState(c, false); } catch {}
-      }
-    }
-
-    function disconnect() {
-      stopFighting();
-      try { bot.quit(); } catch {}
-    }
-
-    const controller = {
-      bot,
-      stats,
-      ping,
-      startFighting,
-      stopFighting,
-      disconnect,
-      getHits: () => ({ myHits, oppHits }),
-      on:   emitter.on.bind(emitter),
-      once: emitter.once.bind(emitter),
-      off:  emitter.off.bind(emitter),
-    };
-
-    bot.once('spawn', () => {
-      bot.removeListener('error', reject);
-      lastHp = bot.health;
-      resolve(controller);
-    });
-  });
 }
 
 function cfg_zone_spacing_half() {
@@ -222,6 +63,194 @@ function randomActions() {
     Math.random() > 0.85,
     Math.random() > 0.25,
   ];
+}
+
+function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
+  return new Promise((resolve, reject) => {
+    // Connection timeout
+    const connectionTimeout = setTimeout(() => {
+      reject(new Error(`${username}: Connection timeout`));
+    }, 30000);
+
+    let bot;
+    try {
+      bot = mineflayer.createBot({
+        host,
+        port,
+        username,
+        version: '1.8.9',
+        auth: 'offline',
+        checkTimeoutInterval: 60000,
+        hideErrors: true,
+      });
+    } catch (err) {
+      clearTimeout(connectionTimeout);
+      reject(err);
+      return;
+    }
+
+    const ping = randomPing();
+    const stats = { hitsLanded: 0, hitsTaken: 0 };
+    const emitter = new EventEmitter();
+
+    let fightInterval = null;
+    let fighting = false;
+    let lastHp = 20;
+    let myHits = 0;
+    let oppHits = 0;
+    let lastAttackTime = 0;
+    let isDisconnected = false;
+
+    // Error handler
+    const errorHandler = (err) => {
+      clearTimeout(connectionTimeout);
+      if (!isDisconnected) {
+        reject(err);
+      }
+    };
+    bot.on('error', errorHandler);
+
+    bot.on('kicked', reason => {
+      isDisconnected = true;
+      stopFighting();
+      emitter.emit('kicked', reason);
+    });
+
+    bot.on('end', () => {
+      isDisconnected = true;
+      stopFighting();
+    });
+
+    bot.on('health', () => {
+      if (isDisconnected) return;
+      const hp = bot.health;
+      if (hp < lastHp - 0.1) {
+        stats.hitsTaken++;
+        oppHits++;
+        emitter.emit('hitTaken', stats.hitsTaken);
+      }
+      lastHp = hp;
+    });
+
+    bot.on('death', () => {
+      stopFighting();
+      emitter.emit('death');
+    });
+
+    bot.on('entityHurt', entity => {
+      if (!fighting || isDisconnected) return;
+      if (entity.type !== 'player') return;
+      if (entity.username === bot.username) return;
+
+      const sinceAttack = Date.now() - lastAttackTime;
+      if (sinceAttack < 400) {
+        stats.hitsLanded++;
+        myHits++;
+        emitter.emit('hitLanded', stats.hitsLanded);
+      }
+    });
+
+    function tick() {
+      if (!fighting || isDisconnected) return;
+      if (!bot.entity) return;
+
+      let oppEntity;
+      try {
+        oppEntity = bot.nearestEntity(e =>
+          e.type === 'player' &&
+          e.username !== bot.username &&
+          Math.abs(e.position.x - zoneOriginX) < cfg_zone_spacing_half()
+        );
+      } catch {
+        return;
+      }
+
+      const inputs = buildInputs(bot, oppEntity, zoneOriginX, myHits, oppHits);
+      const actions = weights ? nn.decide(weights, inputs) : randomActions();
+      const [fwd, back, left, right, jump, attack] = actions;
+      const moving = fwd || back || left || right;
+
+      withPing(ping, () => {
+        if (!fighting || isDisconnected) return;
+        try {
+          bot.setControlState('forward', fwd && !back);
+          bot.setControlState('back', back && !fwd);
+          bot.setControlState('left', left && !right);
+          bot.setControlState('right', right && !left);
+          bot.setControlState('sprint', moving);
+          bot.setControlState('jump', jump);
+        } catch {}
+      });
+
+      if (attack && oppEntity) {
+        try {
+          const dist = bot.entity.position.distanceTo(oppEntity.position);
+          if (dist < 4.5) {
+            withPing(ping, () => {
+              if (!fighting || isDisconnected) return;
+              try {
+                lastAttackTime = Date.now() + ping;
+                bot.lookAt(oppEntity.position.offset(0, 1.62, 0), true);
+                bot.attack(oppEntity);
+              } catch {}
+            });
+          }
+        } catch {}
+      }
+    }
+
+    function startFighting() {
+      if (fightInterval || isDisconnected) return;
+      fighting = true;
+      fightInterval = setInterval(tick, DECISION_INTERVAL_MS);
+    }
+
+    function stopFighting() {
+      fighting = false;
+      if (fightInterval) {
+        clearInterval(fightInterval);
+        fightInterval = null;
+      }
+      if (!isDisconnected && bot.entity) {
+        try {
+          for (const c of ['forward','back','left','right','sprint','jump','sneak']) {
+            bot.setControlState(c, false);
+          }
+        } catch {}
+      }
+    }
+
+    function disconnect() {
+      if (isDisconnected) return;
+      isDisconnected = true;
+      stopFighting();
+      try {
+        bot.removeAllListeners();
+        bot.quit();
+      } catch {}
+    }
+
+    // Create controller ONCE, properly
+    const controller = {
+      bot,
+      stats,
+      ping,
+      startFighting,
+      stopFighting,
+      disconnect,
+      getHits: () => ({ myHits, oppHits }),
+      on: emitter.on.bind(emitter),
+      once: emitter.once.bind(emitter),
+      off: emitter.off.bind(emitter),
+    };
+
+    bot.once('spawn', () => {
+      clearTimeout(connectionTimeout);
+      bot.removeListener('error', errorHandler);
+      lastHp = bot.health || 20;
+      resolve(controller);
+    });
+  });
 }
 
 module.exports = { createBot };

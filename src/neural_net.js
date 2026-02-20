@@ -1,5 +1,4 @@
 // src/neural_net.js
-// Simple feedforward NN: inputs → hidden1 → hidden2 → outputs
 
 const { NN } = require('../config');
 
@@ -27,7 +26,6 @@ function randomWeights() {
 function decide(weights, inputs) {
   let idx = 0;
 
-  // Layer 1: inputs → hidden1
   const h1 = new Float64Array(NN.HIDDEN1);
   for (let i = 0; i < NN.HIDDEN1; i++) {
     let sum = 0;
@@ -38,7 +36,6 @@ function decide(weights, inputs) {
     h1[i] = sigmoid(sum);
   }
 
-  // Layer 2: hidden1 → hidden2
   const h2 = new Float64Array(NN.HIDDEN2);
   for (let i = 0; i < NN.HIDDEN2; i++) {
     let sum = 0;
@@ -49,7 +46,6 @@ function decide(weights, inputs) {
     h2[i] = sigmoid(sum);
   }
 
-  // Layer 3: hidden2 → outputs
   const out = new Float64Array(NN.OUTPUTS);
   for (let i = 0; i < NN.OUTPUTS; i++) {
     let sum = 0;
@@ -61,12 +57,12 @@ function decide(weights, inputs) {
   }
 
   return [
-    out[0] > 0.5, // forward
-    out[1] > 0.5, // back
-    out[2] > 0.5, // left
-    out[3] > 0.5, // right
-    out[4] > 0.5, // jump
-    out[5] > 0.5, // attack
+    out[0] > 0.5,
+    out[1] > 0.5,
+    out[2] > 0.5,
+    out[3] > 0.5,
+    out[4] > 0.5,
+    out[5] > 0.5,
   ];
 }
 

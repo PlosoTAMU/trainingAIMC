@@ -1,4 +1,4 @@
-// config.js
+// config.js - CONSERVATIVE SETTINGS FOR STABLE TRAINING
 
 module.exports = {
   // ── Minecraft server ───────────────────────────────────────────────────────
@@ -11,7 +11,7 @@ module.exports = {
   RCON_PASSWORD: 'pvptrainer',
 
   JAVA_FLAGS: [
-    '-Xmx2G', '-Xms2G',
+    '-Xmx1G', '-Xms1G',              // Conservative memory
     '-XX:+UseG1GC',
     '-XX:+ParallelRefProcEnabled',
     '-XX:MaxGCPauseMillis=200',
@@ -30,39 +30,46 @@ module.exports = {
     '-XX:SurvivorRatio=32',
     '-XX:+PerfDisableSharedMem',
     '-XX:MaxTenuringThreshold=1',
+    '-Dio.netty.eventLoopThreads=2',  // Limit Netty threads
+    '-Dio.netty.allocator.maxOrder=9', // Reduce Netty buffer size
     '-Dusing.aikars.flags=true',
     '-jar',
   ],
 
+  // ── Zone layout ────────────────────────────────────────────────────────────
   ZONE: {
     SPACING: 500,
     FLOOR_Y: 5,
     FIGHTER_SEP: 10,
   },
 
+  // ── Boxing match rules ─────────────────────────────────────────────────────
   BOXING: {
     HITS_TO_WIN: 100,
-    HIT_TIMEOUT_MS: 10_000,
+    HIT_TIMEOUT_MS: 15000,           // 15 seconds per fight (reduced)
     HEAL_ON_HIT: true,
     HEAL_DELAY_MS: 50,
   },
 
+  // ── Ping simulation ────────────────────────────────────────────────────────
   PING: {
     MIN_MS: 10,
     MAX_MS: 150,
   },
 
+  // ── Training (Genetic Algorithm) ──────────────────────────────────────────
   TRAINING: {
-    PARALLEL_ZONES: 1,
-    POP_SIZE: 4,
+    PARALLEL_ZONES: 1,               // MUST be 1 - sequential only
+    POP_SIZE: 4,                     // Start with 4 agents
     FIGHTS_PER_AGENT: 1,
-    TOP_FRACTION: 0.28,
-    MUTATION_RATE: 0.06,
-    MUTATION_STRENGTH: 0.20,
+    TOP_FRACTION: 0.5,
+    MUTATION_RATE: 0.1,
+    MUTATION_STRENGTH: 0.3,
     SAVE_EVERY_N_GENS: 5,
     WEIGHTS_DIR: './weights',
   },
 
+  // ── Neural network ─────────────────────────────────────────────────────────
   NN: {
     INPUTS: 14,
     HIDDEN1: 32,
@@ -71,6 +78,7 @@ module.exports = {
     DECISION_HZ: 10,
   },
 
+  // ── Play server ────────────────────────────────────────────────────────────
   PLAY: {
     SERVER_DIR: './server/play_instance',
     CHAMPION_WEIGHTS: './weights/champion.json',
