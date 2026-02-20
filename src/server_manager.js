@@ -179,7 +179,7 @@ class ServerManager {
       `level-name=world`,
       `motd=PvP Training Server`,
       `network-compression-threshold=-1`,
-      `use-native-transport=true`,
+      `use-native-transport=false`,
       `enable-command-block=true`,
       `allow-flight=true`,
       `max-tick-time=-1`,

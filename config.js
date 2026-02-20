@@ -31,7 +31,7 @@ module.exports = {
     '-XX:+PerfDisableSharedMem',
     '-XX:MaxTenuringThreshold=1',
     '-Dio.netty.eventLoopThreads=2',  // Limit Netty threads
-    '-Dio.netty.allocator.maxOrder=9', // Reduce Netty buffer size
+    '-Dio.netty.transport.noNative=true', // Force NIO, avoid epoll crash
     '-Dusing.aikars.flags=true',
     '-jar',
   ],
