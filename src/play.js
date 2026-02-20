@@ -22,6 +22,11 @@ const PLAYER_ZONE = 0;
 const { BOXING } = cfg;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+async function reTeleport(server, name, sp) {
+  await sleep(600);
+  await server.rcon(`tp ${name} ${sp.x} ${sp.y} ${sp.z} ${sp.yaw} 0`);
+}
+
 function getLanIps() {
   const ifaces = os.networkInterfaces();
   const ips = [];
@@ -103,6 +108,7 @@ async function main() {
       `give ${humanName} minecraft:diamond_sword 1 0 {Unbreakable:1}`,
       `effect ${humanName} minecraft:instant_health 1 255 true`,
     ]);
+    await reTeleport(server, humanName, sp);
 
     if (aiBot) {
       aiBot.stopFighting();
@@ -178,6 +184,7 @@ async function main() {
             `give ${humanName} minecraft:diamond_sword 1 0 {Unbreakable:1}`,
             `effect ${humanName} minecraft:instant_health 1 255 true`,
           ]);
+          await reTeleport(server, humanName, sp);
 
           aiBot = await spawnAI(server, weights);
           attachAiBotListeners();
@@ -233,6 +240,7 @@ async function spawnAI(server, weights) {
     `effect ${BOT_NAME} minecraft:instant_health 1 255 true`,
     `gamemode 2 ${BOT_NAME}`,
   ]);
+  await reTeleport(server, BOT_NAME, sp);
 
   ctrl.startFighting();
   console.log(chalk.cyan(`  AI ping: ${ctrl.ping}ms`));
