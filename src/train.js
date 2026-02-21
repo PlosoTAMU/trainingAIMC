@@ -30,6 +30,8 @@ async function main() {
   console.log(chalk.bold.cyan('\n⚔  MC 1.8 PvP AI Trainer  ⚔\n'));
   console.log(chalk.gray(`Parallel instances: ${TRAINING.PARALLEL_INSTANCES}`));
   console.log(chalk.gray(`Population size:    ${TRAINING.POP_SIZE}`));
+  console.log(chalk.gray(`Active arenas:      ${TRAINING.ACTIVE_ARENAS}`));
+  console.log(chalk.gray(`Weights dir:        ${TRAINING.WEIGHTS_DIR}`));
 
   // Boot all server instances in parallel
   await bootInstances();
@@ -71,6 +73,8 @@ async function main() {
 
     if (generation % TRAINING.SAVE_EVERY_N_GENS === 0) {
       await saveGeneration(generation, ranked, bestScore);
+    } else {
+      await saveChampion(generation, ranked[0].weights, bestScore);
     }
 
     population = evolve(ranked);
@@ -268,7 +272,7 @@ async function connectBotWithRetry(opts, maxRetries = 3) {
         err.message.includes('timeout') ||
         err.message.includes('Timed out');
       if (attempt < maxRetries && retryable) {
-        await sleep(3000 * attempt);
+        await sleep(1000 * attempt);  // 1s, 2s — faster than 3s×attempt
       } else {
         throw err;
       }
@@ -280,7 +284,7 @@ function evolve(ranked) {
   const topN = Math.floor(ranked.length * TRAINING.TOP_FRACTION);
   const elite = ranked.slice(0, topN);
   const newPop = [];
-  for (const { weights } of elite) newPop.push(new Float64Array(weights));
+  for (const { weights } of elite) newPop.push(new Float32Array(weights));
   while (newPop.length < TRAINING.POP_SIZE) {
     const parent = elite[Math.floor(Math.random() * elite.length)].weights;
     newPop.push(mutate(parent));
@@ -289,7 +293,7 @@ function evolve(ranked) {
 }
 
 function mutate(weights) {
-  const child = new Float64Array(weights);
+  const child = new Float32Array(weights);
   for (let i = 0; i < child.length; i++) {
     if (Math.random() < TRAINING.MUTATION_RATE) {
       child[i] += (Math.random() - 0.5) * TRAINING.MUTATION_STRENGTH;
@@ -298,20 +302,25 @@ function mutate(weights) {
   return child;
 }
 
-async function saveGeneration(gen, ranked, bestScore) {
-  const data = {
-    generation: gen,
-    bestScore,
-    population: ranked.map(r => nn.toJSON(r.weights)),
-  };
+async function saveChampion(gen, weights, bestScore) {
   await fs.ensureDir(cfg.TRAINING.WEIGHTS_DIR);
   await fs.writeJSON(
-    path.join(cfg.TRAINING.WEIGHTS_DIR, `gen_${gen}.json`), data, { spaces: 2 });
-  await fs.writeJSON(
     path.join(cfg.TRAINING.WEIGHTS_DIR, 'champion.json'),
-    { generation: gen, score: bestScore, weights: nn.toJSON(ranked[0].weights) },
-    { spaces: 2 });
-  console.log(chalk.gray(`  Saved generation ${gen}`));
+    { generation: gen, score: bestScore, weights: nn.toJSON(weights) },
+    { spaces: 0 },  // compact JSON — faster write
+  );
+}
+
+async function saveGeneration(gen, ranked, bestScore) {
+  await fs.ensureDir(cfg.TRAINING.WEIGHTS_DIR);
+  // Compact JSON (spaces:0) — full population can be ~1MB, no need for pretty-print
+  await fs.writeJSON(
+    path.join(cfg.TRAINING.WEIGHTS_DIR, `gen_${gen}.json`),
+    { generation: gen, bestScore, population: ranked.map(r => nn.toJSON(r.weights)) },
+    { spaces: 0 },
+  );
+  await saveChampion(gen, ranked[0].weights, bestScore);
+  console.log(chalk.gray(`  Saved generation ${gen} → ${cfg.TRAINING.WEIGHTS_DIR}`));
 }
 
 async function findLatestWeights() {

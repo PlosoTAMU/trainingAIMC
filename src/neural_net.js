@@ -16,7 +16,7 @@ function weightCount() {
 
 function randomWeights() {
   const n = weightCount();
-  const w = new Float64Array(n);
+  const w = new Float32Array(n);  // Float32 = half memory, faster V8 typed-array ops
   for (let i = 0; i < n; i++) {
     w[i] = (Math.random() - 0.5) * 2;
   }
@@ -72,7 +72,7 @@ function toJSON(weights) {
 }
 
 function fromJSON(arr) {
-  return new Float64Array(arr);
+  return new Float32Array(arr);
 }
 
 module.exports = {

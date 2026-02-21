@@ -1,5 +1,18 @@
 // config.js - CONSERVATIVE SETTINGS FOR STABLE TRAINING
 
+// Weights are stored on the Linux desktop (accessible from WSL).
+// When running under WSL or native Linux this resolves directly.
+// When running under Windows Node.js, map via the WSL filesystem mount.
+const path = require('path');
+const os   = require('os');
+function resolveWeightsDir() {
+  const desktopPath = '/home/plosouser/Desktop/pvp_weights';
+  if (process.platform !== 'win32') return desktopPath;
+  // Windows: access WSL filesystem via \\wsl$\...
+  // Use the local fallback so Windows Node can write it without WSL mounted drive issues
+  return path.join(os.homedir(), 'Desktop', 'pvp_weights');
+}
+
 module.exports = {
   // ── Minecraft server ───────────────────────────────────────────────────────
   MC_VERSION: '1.8.8',
@@ -67,15 +80,17 @@ module.exports = {
   // ── Boxing match rules ─────────────────────────────────────────────────────
   BOXING: {
     HITS_TO_WIN: 100,
-    HIT_TIMEOUT_MS: 5000,   // 5s per fight — short rounds, fast iteration
+    HIT_TIMEOUT_MS: 8000,   // 8s — more signal per fight with approach reward
     HEAL_ON_HIT: true,
     HEAL_DELAY_MS: 50,
   },
 
   // ── Ping simulation ────────────────────────────────────────────────────────
+  // Zero ping during training — simulated latency is pure overhead with 64
+  // simultaneous bots and adds no training value.
   PING: {
-    MIN_MS: 10,
-    MAX_MS: 150,
+    MIN_MS: 0,
+    MAX_MS: 0,
   },
 
   // ── Training (Genetic Algorithm) ──────────────────────────────────────────
@@ -88,11 +103,11 @@ module.exports = {
     ACTIVE_ARENAS: 32,               // 32 arenas × 2 bots = 64 bots at once
     POP_SIZE: 64,                    // must = ACTIVE_ARENAS * 2
     FIGHTS_PER_AGENT: 1,
-    TOP_FRACTION: 0.5,
-    MUTATION_RATE: 0.1,
-    MUTATION_STRENGTH: 0.3,
-    SAVE_EVERY_N_GENS: 10,
-    WEIGHTS_DIR: './weights',
+    TOP_FRACTION: 0.25,              // stronger selection pressure = faster convergence
+    MUTATION_RATE: 0.15,             // more exploration from fresh start
+    MUTATION_STRENGTH: 0.4,
+    SAVE_EVERY_N_GENS: 10,           // full population snapshot every 10 gens
+    WEIGHTS_DIR: resolveWeightsDir(),
   },
 
   // ── Neural network ─────────────────────────────────────────────────────────
@@ -101,13 +116,13 @@ module.exports = {
     HIDDEN1: 32,
     HIDDEN2: 24,
     OUTPUTS: 7,   // fwd, back, left, right, jump, attack, block
-    DECISION_HZ: 10,
+    DECISION_HZ: 20,  // 20 decisions/sec — richer signal per fight
   },
 
   // ── Play server ────────────────────────────────────────────────────────────
   PLAY: {
     SERVER_DIR: './server/play_instance',
-    CHAMPION_WEIGHTS: './weights/champion.json',
+    CHAMPION_WEIGHTS: path.join(resolveWeightsDir(), 'champion.json'),
     BOT_USERNAME: 'PvP_AI',
     BIND_HOST: '0.0.0.0',
   },
