@@ -273,7 +273,6 @@ async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
     const RANGE_SIGMA     = 1.5;   // std-dev of Gaussian; ±1.5 blocks gets ~60% bonus
     const RANGE_BONUS     = 0.6;   // max points per sample at ideal range
     const AIM_BONUS       = 0.4;   // max points per sample for perfect aim
-    const CLICK_BONUS     = 0.05;  // points per swing attempt (small — quantity matters less than quality)
 
     let rangeA = 0, rangeB = 0;
     let aimA   = 0, aimB   = 0;
@@ -340,14 +339,10 @@ async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
     botB.stopFighting();
     const elapsed = ((Date.now() - fightStart) / 1000).toFixed(1);
 
-    const hitsA       = botA.getHits().myHits;
-    const hitsB       = botB.getHits().myHits;
-    const clicksA     = botA.getHits().attackClicks;
-    const clicksB     = botB.getHits().attackClicks;
-    const clickScoreA = clicksA * CLICK_BONUS;
-    const clickScoreB = clicksB * CLICK_BONUS;
-    const scoreA = hitsA + rangeA + aimA + clickScoreA;
-    const scoreB = hitsB + rangeB + aimB + clickScoreB;
+    const hitsA  = botA.getHits().myHits;
+    const hitsB  = botB.getHits().myHits;
+    const scoreA = hitsA + rangeA + aimA;
+    const scoreB = hitsB + rangeB + aimB;
 
     // Determine winner
     let resultLine;
@@ -358,15 +353,15 @@ async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
     } else {
       resultLine = chalk.gray(`DRAW`);
     }
-    const breakdown = (name, hits, range, aim, clicks, clickSc, total) =>
-      chalk.gray(`${name}: ${hits}hits +${range.toFixed(1)}range +${aim.toFixed(1)}aim +${clickSc.toFixed(1)}click(${clicks}) = ${chalk.white(total.toFixed(1))}`);
+    const breakdown = (name, hits, range, aim, total) =>
+      chalk.gray(`${name}: ${hits}hits +${range.toFixed(1)}range +${aim.toFixed(1)}aim = ${chalk.white(total.toFixed(1))}`);
     console.log(
       `\n${tag} ${chalk.bold('⏹  FIGHT OVER')} (${elapsed}s) — ${resultLine}\n` +
-      `${tag}  ${breakdown(nameA, hitsA, rangeA, aimA, clicksA, clickScoreA, scoreA)}\n` +
-      `${tag}  ${breakdown(nameB, hitsB, rangeB, aimB, clicksB, clickScoreB, scoreB)}`
+      `${tag}  ${breakdown(nameA, hitsA, rangeA, aimA, scoreA)}\n` +
+      `${tag}  ${breakdown(nameB, hitsB, rangeB, aimB, scoreB)}`
     );
 
-    log.step(FTAG, `done — ${nameA}:${hitsA}hits+${rangeA.toFixed(1)}range+${aimA.toFixed(1)}aim+${clickScoreA.toFixed(1)}click ${nameB}:${hitsB}hits+${rangeB.toFixed(1)}range+${aimB.toFixed(1)}aim+${clickScoreB.toFixed(1)}click`);
+    log.step(FTAG, `done — ${nameA}:${hitsA}hits+${rangeA.toFixed(1)}range+${aimA.toFixed(1)}aim ${nameB}:${hitsB}hits+${rangeB.toFixed(1)}range+${aimB.toFixed(1)}aim`);
 
     return { score: scoreA, oppScore: scoreB };
 
