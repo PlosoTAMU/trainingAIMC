@@ -71,10 +71,20 @@ async function main() {
     const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
     console.log(chalk.green(`\nBest: ${bestScore.toFixed(1)}  Avg: ${avgScore.toFixed(1)}`));
 
+    // Print top-5 leaderboard
+    console.log(chalk.bold.white('\n  Top 5 agents this generation:'));
+    ranked.slice(0, 5).forEach(({ score }, i) => {
+      const medal = ['🥇','🥈','🥉','  4','  5'][i];
+      console.log(`  ${medal}  Agent ${i.toString().padStart(2)} — score: ${chalk.yellow(score.toFixed(1))}`);
+    });
+    const worstScore = ranked[ranked.length - 1].score;
+    console.log(chalk.gray(`  Worst: ${worstScore.toFixed(1)}  Spread: ${(bestScore - worstScore).toFixed(1)}\n`));
+
     if (generation % TRAINING.SAVE_EVERY_N_GENS === 0) {
       await saveGeneration(generation, ranked, bestScore);
     } else {
       await saveChampion(generation, ranked[0].weights, bestScore);
+      console.log(chalk.gray(`  💾 Champion saved (gen ${generation}, score ${bestScore.toFixed(1)}) → ${cfg.TRAINING.WEIGHTS_DIR}`));
     }
 
     population = evolve(ranked);
@@ -130,19 +140,26 @@ async function evaluatePopulation(population) {
     )
   );
 
+  let errCount = 0;
   for (const [i, res] of results.entries()) {
     const { idxA, idxB } = schedule[i];
     if (res.status === 'fulfilled') {
       const { score, oppScore } = res.value;
       scores[idxA] += score;
       scores[idxB] += oppScore;
-      process.stdout.write(chalk.green(`[${idxA}v${idxB}:${score}-${oppScore}] `));
+      process.stdout.write(chalk.green(`[${idxA}v${idxB}:${score.toFixed(0)}-${oppScore.toFixed(0)}] `));
     } else {
+      errCount++;
       log.error('EvalPop', `fight ${i} threw`, res.reason);
       process.stdout.write(chalk.red(`[${idxA}v${idxB}:ERR] `));
     }
   }
   console.log();
+  if (errCount > 0) {
+    console.log(chalk.red(`  ⚠  ${errCount}/${results.length} fights failed (see log for details)`));
+  } else {
+    console.log(chalk.gray(`  ✓ All ${results.length} fights completed`));
+  }
 
   return scores;
 }
@@ -151,9 +168,11 @@ async function evaluatePopulation(population) {
 
 async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
   fightCounter++;
-  const nameA = `A${fightCounter}`;
-  const nameB = `B${fightCounter}`;
-  const FTAG  = `FIGHT:${fightCounter}`;
+  const fightId = fightCounter;
+  const nameA = `A${fightId}`;
+  const nameB = `B${fightId}`;
+  const FTAG  = `FIGHT:${fightId}`;
+  const tag   = chalk.cyan(`[F${fightId}|A${arenaId}]`);
 
   const spawnA = ServerManager.spawnA(arenaId);
   const spawnB = ServerManager.spawnB(arenaId);
@@ -163,6 +182,7 @@ async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
 
   try {
     log.step(FTAG, `starting — agents ${idxA} vs ${idxB}, names ${nameA}/${nameB}`);
+    console.log(`${tag} ${chalk.white(`Agent ${idxA} vs Agent ${idxB}`)} — connecting...`);
 
     await server.rconBatch([`kick ${nameA} reset`, `kick ${nameB} reset`]);
     await sleep(100);
@@ -185,6 +205,25 @@ async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
       }),
     ]);
 
+    console.log(`${tag} ${chalk.green('✓ Both bots connected')}`);
+
+    // Wire live hit events so we can see hits as they happen
+    let hitsLiveA = 0, hitsLiveB = 0;
+    botA.on('hitLanded', total => {
+      hitsLiveA = total;
+      process.stdout.write(chalk.green(`${tag}${nameA}→HIT(${total}) `));
+    });
+    botB.on('hitLanded', total => {
+      hitsLiveB = total;
+      process.stdout.write(chalk.yellow(`${tag}${nameB}→HIT(${total}) `));
+    });
+    botA.on('kicked', reason => {
+      console.log(`\n${tag} ${chalk.red(`${nameA} KICKED:`)} ${JSON.stringify(reason)}`);
+    });
+    botB.on('kicked', reason => {
+      console.log(`\n${tag} ${chalk.red(`${nameB} KICKED:`)} ${JSON.stringify(reason)}`);
+    });
+
     await sleep(500);
     await server.rconBatch([
       `gamemode 2 ${nameA}`,
@@ -201,9 +240,17 @@ async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
       `effect ${nameB} instant_health 1 255 true`,
     ]);
 
+    console.log(
+      `${tag} ${chalk.magenta('Teleported')} ` +
+      `${nameA}→(${spawnA.x.toFixed(1)}, ${spawnA.y}, ${spawnA.z.toFixed(1)}) ` +
+      `${nameB}→(${spawnB.x.toFixed(1)}, ${spawnB.y}, ${spawnB.z.toFixed(1)})`
+    );
+
     await sleep(200);
     botA.startFighting();
     botB.startFighting();
+    const fightStart = Date.now();
+    console.log(`${tag} ${chalk.bold.yellow('⚔  FIGHT START')} (timeout: ${BOXING.HIT_TIMEOUT_MS}ms)`);
 
     // Sample proximity every 500ms — reward agents that close the gap.
     // Score bonus = number of samples where dist < APPROACH_THRESHOLD blocks.
@@ -235,11 +282,27 @@ async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
     clearInterval(proximitySampler);
     botA.stopFighting();
     botB.stopFighting();
+    const elapsed = ((Date.now() - fightStart) / 1000).toFixed(1);
 
     const hitsA = botA.getHits().myHits;
     const hitsB = botB.getHits().myHits;
     const scoreA = hitsA + proximityA;
     const scoreB = hitsB + proximityB;
+
+    // Determine winner
+    let resultLine;
+    if (hitsA > hitsB) {
+      resultLine = chalk.green(`WINNER: Agent ${idxA} (${nameA})`) +
+        chalk.gray(` | ${nameA}: ${hitsA}hits +${proximityA.toFixed(1)}prox = ${scoreA.toFixed(1)} | ${nameB}: ${hitsB}hits +${proximityB.toFixed(1)}prox = ${scoreB.toFixed(1)}`);
+    } else if (hitsB > hitsA) {
+      resultLine = chalk.green(`WINNER: Agent ${idxB} (${nameB})`) +
+        chalk.gray(` | ${nameA}: ${hitsA}hits +${proximityA.toFixed(1)}prox = ${scoreA.toFixed(1)} | ${nameB}: ${hitsB}hits +${proximityB.toFixed(1)}prox = ${scoreB.toFixed(1)}`);
+    } else {
+      resultLine = chalk.gray(`DRAW`) +
+        chalk.gray(` | ${nameA}: ${hitsA}hits +${proximityA.toFixed(1)}prox | ${nameB}: ${hitsB}hits +${proximityB.toFixed(1)}prox`);
+    }
+    console.log(`\n${tag} ${chalk.bold('⏹  FIGHT OVER')} (${elapsed}s) — ${resultLine}`);
+
     log.step(FTAG, `done — ${nameA}:${hitsA}hits+${proximityA.toFixed(1)}prox ${nameB}:${hitsB}hits+${proximityB.toFixed(1)}prox`);
 
     return { score: scoreA, oppScore: scoreB };
