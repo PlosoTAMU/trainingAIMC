@@ -18,7 +18,6 @@ const PLAY_PORT = args.port ? parseInt(args.port) : cfg.PLAY_SERVER_PORT;
 const BIND_HOST = args.bind || cfg.PLAY.BIND_HOST;
 const PLAY_RCON = cfg.RCON_PORT + 1;
 
-// Pick a random valid arena index (0..63)
 function pickArena() {
   return Math.floor(Math.random() * cfg.ARENAS.length);
 }
@@ -66,10 +65,9 @@ async function main() {
   console.log(chalk.cyan('Starting play server...'));
   await server.start();
 
-  // Play-server-specific rules on top of the global ones
   await server.rconBatch([
-    'gamerule naturalRegeneration true',  // human gets normal HP regen
-    'op Ploso',                            // give Ploso operator
+    'gamerule naturalRegeneration true',
+    'op Ploso',
   ]);
 
   const lanIps = getLanIps();
@@ -90,13 +88,79 @@ async function main() {
   let humanName = null;
   let humanHits = 0;
   let aiHits = 0;
-  let currentArena = 0;  // set fresh before each match
+  let currentArena = 0;
+  let isSpawningAI = false;  // NEW: prevent duplicate spawns
 
-  // Re-arm the fight after a result (human stays on server)
+  // Clean up AI bot properly
+  async function cleanupAI() {
+    if (aiBot) {
+      try { aiBot.stopFighting(); } catch {}
+      try { aiBot.disconnect(); } catch {}
+      aiBot = null;
+    }
+    // Give server time to fully disconnect the bot
+    await sleep(500);
+  }
+
+  async function spawnAI(arenaId = 0) {
+    // Prevent duplicate spawn attempts
+    if (isSpawningAI) {
+      console.log(chalk.gray('  [spawnAI] Already spawning, skipping...'));
+      return null;
+    }
+    isSpawningAI = true;
+
+    try {
+      const sp = ServerManager.zoneSpawnB(arenaId);
+
+      // Clean up any existing AI first
+      await cleanupAI();
+
+      // Kick any stale session and wait for it to clear
+      await server.rconBatch([`kick ${BOT_NAME} cleanup`]).catch(() => {});
+      await sleep(1500);  // IMPORTANT: give server time to fully remove the player
+
+      console.log(chalk.gray(`  [spawnAI] Connecting bot ${BOT_NAME}...`));
+
+      const ctrl = await createBot({
+        host: '127.0.0.1',
+        port: PLAY_PORT,
+        username: BOT_NAME,
+        weights,
+        zoneOriginX: 0,
+      });
+
+      // Wait for bot to fully spawn
+      await sleep(500);
+
+      await server.rconBatch([
+        `gamemode 2 ${BOT_NAME}`,
+        `effect ${BOT_NAME} resistance 9999 4 true`,
+        `effect ${BOT_NAME} saturation 9999 255 true`,  // FIXED: was humanName
+        `tp ${BOT_NAME} ${sp.x} ${sp.y} ${sp.z} ${sp.yaw} 0`,
+        `clear ${BOT_NAME}`,
+        `give ${BOT_NAME} minecraft:diamond_sword 1 0 {Unbreakable:1}`,
+        `effect ${BOT_NAME} instant_health 1 255 true`,
+      ]);
+
+      await reTeleport(server, BOT_NAME, sp);
+
+      ctrl.startFighting();
+      console.log(chalk.cyan(`  AI spawned (ping: ${ctrl.ping}ms)`));
+
+      return ctrl;
+    } catch (err) {
+      console.log(chalk.red(`  [spawnAI] Failed: ${err.message}`));
+      return null;
+    } finally {
+      isSpawningAI = false;
+    }
+  }
+
   const resetMatch = async () => {
-    await sleep(4000); // let the title/sound play
+    await sleep(4000);
     if (!humanName) return;
-    // check human is still online
+
     try {
       const list = await server.sendCommand('list');
       if (!list || !list.includes(humanName)) return;
@@ -110,26 +174,26 @@ async function main() {
 
     const sp = ServerManager.zoneSpawnA(currentArena);
     await server.rconBatch([
-      // Resistance first — prevents any damage during teleport
       `effect ${humanName} resistance 9999 4 true`,
+      `effect ${humanName} saturation 9999 255 true`,
       `tp ${humanName} ${sp.x} ${sp.y} ${sp.z} ${sp.yaw} 0`,
       `clear ${humanName}`,
       `give ${humanName} minecraft:diamond_sword 1 0 {Unbreakable:1}`,
-      `effect ${humanName} saturation 9999 255 true`,
+      `effect ${humanName} instant_health 1 255 true`,
     ]);
     await reTeleport(server, humanName, sp);
 
+    await cleanupAI();
+    aiBot = await spawnAI(currentArena);
     if (aiBot) {
-      aiBot.stopFighting();
-      aiBot.disconnect();
-      aiBot = null;
+      attachAiBotListeners();
+      matchActive = true;
     }
-    aiBot = await spawnAI(server, weights, currentArena);
-    attachAiBotListeners();
-    matchActive = true;
   };
 
   const attachAiBotListeners = () => {
+    if (!aiBot) return;
+
     aiBot.on('hitLanded', count => {
       if (!matchActive) return;
       aiHits = count;
@@ -161,11 +225,36 @@ async function main() {
         announceResult(server, false, humanName).then(resetMatch);
       }
     });
+
+    // Handle AI getting kicked/disconnected unexpectedly
+    aiBot.on('kicked', reason => {
+      console.log(chalk.yellow(`\n[Match] AI was kicked: ${JSON.stringify(reason)}`));
+      if (matchActive && humanName) {
+        matchActive = false;
+        // Don't immediately respawn - wait a bit
+        setTimeout(() => {
+          if (humanName && !aiBot) {
+            console.log(chalk.cyan('[Match] Respawning AI after kick...'));
+            spawnAI(currentArena).then(bot => {
+              if (bot) {
+                aiBot = bot;
+                attachAiBotListeners();
+                matchActive = true;
+              }
+            });
+          }
+        }, 3000);
+      }
+    });
   };
 
   const monitor = async () => {
     while (true) {
       await sleep(2000);
+
+      // Skip if already spawning
+      if (isSpawningAI) continue;
+
       try {
         const list = await server.sendCommand('list');
         if (!list) continue;
@@ -174,7 +263,7 @@ async function main() {
         const total = countMatch ? parseInt(countMatch[1]) : 0;
         const humanCount = aiBot ? total - 1 : total;
 
-        if (humanCount > 0 && !aiBot) {
+        if (humanCount > 0 && !aiBot && !isSpawningAI) {
           const nameMatch = list.match(/players online:\s*(.+)/);
           if (nameMatch) {
             const names = nameMatch[1].split(',').map(n => n.trim()).filter(n => n !== BOT_NAME);
@@ -186,32 +275,33 @@ async function main() {
           currentArena = pickArena();
           console.log(chalk.gray(`  Arena: ${currentArena}`));
 
-          // Resistance first — prevents any damage during teleport
           const sp = ServerManager.zoneSpawnA(currentArena);
           await server.rconBatch([
             `effect ${humanName} resistance 9999 4 true`,
+            `effect ${humanName} saturation 9999 255 true`,
             `gamemode 0 ${humanName}`,
             `tp ${humanName} ${sp.x} ${sp.y} ${sp.z} ${sp.yaw} 0`,
             `clear ${humanName}`,
             `give ${humanName} minecraft:diamond_sword 1 0 {Unbreakable:1}`,
             `effect ${humanName} instant_health 1 255 true`,
-      `effect ${humanName} saturation 9999 255 true`,
           ]);
           await reTeleport(server, humanName, sp);
 
-          aiBot = await spawnAI(server, weights, currentArena);
-          attachAiBotListeners();
-          matchActive = true;
+          aiBot = await spawnAI(currentArena);
+          if (aiBot) {
+            attachAiBotListeners();
+            matchActive = true;
+          }
 
         } else if (humanCount === 0 && aiBot) {
           console.log(chalk.yellow('\n[Match] Human disconnected — AI leaving.'));
           matchActive = false;
-          aiBot.stopFighting();
-          aiBot.disconnect();
-          aiBot = null;
+          await cleanupAI();
           humanName = null;
         }
-      } catch {}
+      } catch (err) {
+        // Silently continue on errors
+      }
     }
   };
   monitor();
@@ -227,40 +317,12 @@ async function main() {
 
   const shutdown = async () => {
     console.log(chalk.yellow('\n\nShutting down...'));
-    if (aiBot) { try { aiBot.disconnect(); } catch {} }
+    await cleanupAI();
     await server.stop();
     process.exit(0);
   };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
-}
-
-async function spawnAI(server, weights, arenaId = 0) {
-  const sp = ServerManager.zoneSpawnB(arenaId);
-  // in spawnAI(server, weights, arenaId)
-  await server.rconBatch([`kick ${BOT_NAME} reset`]).catch(() => {});
-  const ctrl = await createBot({
-    host: '127.0.0.1',
-    port: PLAY_PORT,
-    username: BOT_NAME,
-    weights,
-    zoneOriginX: 0,
-  });
-
-  await server.rconBatch([
-    `effect ${BOT_NAME} resistance 9999 4 true`,
-    `tp ${BOT_NAME} ${sp.x} ${sp.y} ${sp.z} ${sp.yaw} 0`,
-    `clear ${BOT_NAME}`,
-    `give ${BOT_NAME} minecraft:diamond_sword 1 0 {Unbreakable:1}`,
-    `effect ${BOT_NAME} instant_health 1 255 true`,
-    `gamemode 2 ${BOT_NAME}`,
-      `effect ${humanName} saturation 9999 255 true`,
-  ]);
-  await reTeleport(server, BOT_NAME, sp);
-
-  ctrl.startFighting();
-  console.log(chalk.cyan(`  AI ping: ${ctrl.ping}ms`));
-  return ctrl;
 }
 
 async function announceResult(server, aiWon, humanName) {
