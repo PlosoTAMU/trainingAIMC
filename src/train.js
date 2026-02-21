@@ -105,18 +105,18 @@ async function bootInstances() {
 async function evaluatePopulation(population) {
   const scores = new Array(population.length).fill(0);
   const server = instances[0];  // single server hosts all arenas
+  const activeArenas = TRAINING.ACTIVE_ARENAS;
 
-  // Pair agent i vs agent (i+1)%n — gives every agent exactly one fight.
-  // With POP_SIZE=128 this produces 64 fights → fills all 64 arenas at once.
+  // Pair agent i vs agent (i+1)%n — each pair gets its own arena slot.
   const schedule = population.map((_, i) => ({
     idxA: i,
     idxB: (i + 1) % population.length,
-    arenaId: i % cfg.ARENAS.length,
+    arenaId: i % activeArenas,
   }));
 
-  console.log(chalk.gray(`  ${schedule.length} fights firing simultaneously across ${cfg.ARENAS.length} arenas\n`));
+  console.log(chalk.gray(`  ${schedule.length} fights firing simultaneously across ${activeArenas} arenas\n`));
 
-  // Fire ALL fights at once — each uses a different arena so bots never meet
+  // Fire ALL fights at once — each uses a different arena so bots never collide
   const results = await Promise.allSettled(
     schedule.map(({ idxA, idxB, arenaId }) =>
       runFight(server, population[idxA], population[idxB], idxA, idxB, arenaId)

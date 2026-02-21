@@ -18,19 +18,18 @@ class ServerManager {
     rconPort  = cfg.RCON_PORT,
     serverDir = cfg.SERVER_DIR,
     bindHost  = '127.0.0.1',
+    pipeConsole = false,   // if true, mirror MC stdout to process.stdout
   } = {}) {
     this.port      = port;
     this.rconPort  = rconPort;
     this.serverDir = path.resolve(serverDir);
     this.bindHost  = bindHost;
+    this.pipeConsole = pipeConsole;
     this.process   = null;
     this._rconClient = null;
     this.ready     = false;
     this._rconQueue = Promise.resolve();
     this._rconReconnecting = false;
-    // Play server binds to 0.0.0.0 so a human can connect from outside.
-    // Training server always binds to 127.0.0.1.  Use this to gate play-server
-    // specific config tweaks (view distance, gamemode, movement thresholds).
     this._isPlayServer = (bindHost === '0.0.0.0');
   }
 
@@ -374,6 +373,8 @@ aliases: now-in-commands.yml
       // Mirror every line of MC output to the debug log file
       const trimmed = chunk.trim();
       if (trimmed) log.step('MC-OUT', trimmed);
+      // Optionally echo live to the terminal (used by the console script)
+      if (this.pipeConsole) process.stdout.write(chunk);
     });
 
     this.process.stderr.on('data', d => {
@@ -385,6 +386,7 @@ aliases: now-in-commands.yml
       }
       const trimmed = chunk.trim();
       if (trimmed) log.step('MC-ERR', trimmed);
+      if (this.pipeConsole) process.stderr.write(chunk);
     });
 
     this.process.on('exit', code => {

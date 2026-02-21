@@ -11,7 +11,7 @@ module.exports = {
   RCON_PASSWORD: 'pvptrainer',
 
   JAVA_FLAGS: [
-    '-Xmx4G', '-Xms4G',              // More heap for 128 simultaneous bots
+    '-Xmx6G', '-Xms6G',              // More heap for 128 simultaneous bots
     '-XX:+UseG1GC',
     '-XX:+ParallelRefProcEnabled',
     '-XX:MaxGCPauseMillis=200',
@@ -34,7 +34,7 @@ module.exports = {
     '-Dio.netty.transport.noNative=true', // Force NIO, avoid epoll crash
     '-Dusing.aikars.flags=true',
     '-jar',
-  ],
+  ], //
 
   ARENAS: (() => {
   const Y = 102;
@@ -77,12 +77,14 @@ module.exports = {
   },
 
   // ── Training (Genetic Algorithm) ──────────────────────────────────────────
-  // Single server hosts all 64 arenas simultaneously.
-  // POP_SIZE=128 → 64 fights fire at once (one per arena), no batching needed.
+  // ACTIVE_ARENAS: how many of the 64 arenas to use simultaneously.
+  // Each arena = 2 bots. Tune down if server runs out of memory or kicks bots.
+  // POP_SIZE must equal ACTIVE_ARENAS * 2.
   TRAINING: {
-    PARALLEL_INSTANCES: 1,           // one server — all arenas run on it
+    PARALLEL_INSTANCES: 1,
     PORT_STRIDE: 10,
-    POP_SIZE: 128,                   // 64 pairs fill every arena simultaneously
+    ACTIVE_ARENAS: 32,               // 32 arenas × 2 bots = 64 bots at once
+    POP_SIZE: 64,                    // must = ACTIVE_ARENAS * 2
     FIGHTS_PER_AGENT: 1,
     TOP_FRACTION: 0.5,
     MUTATION_RATE: 0.1,

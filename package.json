@@ -6,7 +6,8 @@
   "scripts": {
     "train": "node src/train.js",
     "play": "node src/play.js",
-    "setup": "chmod +x server/setup.sh && ./server/setup.sh"
+    "setup": "chmod +x server/setup.sh && ./server/setup.sh",
+    "console": "node src/console.js"
   },
   "dependencies": {
     "mineflayer": "^4.11.1",
