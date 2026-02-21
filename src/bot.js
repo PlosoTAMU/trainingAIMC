@@ -57,12 +57,13 @@ function cfg_zone_spacing_half() {
 
 function randomActions() {
   return [
-    Math.random() > 0.4,
-    false,
-    Math.random() > 0.7,
-    Math.random() > 0.7,
-    Math.random() > 0.85,
-    Math.random() > 0.25,
+    Math.random() > 0.4,   // fwd
+    false,                  // back
+    Math.random() > 0.7,   // left
+    Math.random() > 0.7,   // right
+    Math.random() > 0.85,  // jump
+    Math.random() > 0.25,  // attack
+    Math.random() > 0.7,   // block
   ];
 }
 
@@ -216,7 +217,7 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
 
       const inputs = buildInputs(bot, oppEntity, zoneOriginX, myHits, oppHits);
       const actions = weights ? nn.decide(weights, inputs) : randomActions();
-      const [fwd, back, left, right, jump, attack] = actions;
+      const [fwd, back, left, right, jump, attack, block] = actions;
       const moving = fwd || back || left || right;
 
       withPing(ping, () => {
@@ -226,8 +227,15 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
           bot.setControlState('back', back && !fwd);
           bot.setControlState('left', left && !right);
           bot.setControlState('right', right && !left);
-          bot.setControlState('sprint', moving);
+          bot.setControlState('sprint', moving && !block);
           bot.setControlState('jump', jump);
+          // Block = hold right-click with sword (sneak slot used as shield signal)
+          bot.setControlState('sneak', block);
+          if (block) {
+            try { bot.activateItem(); } catch {}
+          } else {
+            try { bot.deactivateItem(); } catch {}
+          }
         } catch {}
       });
 

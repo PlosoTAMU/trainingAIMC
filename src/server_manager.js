@@ -131,37 +131,9 @@ class ServerManager {
 
     await fs.writeFile(path.join(this.serverDir, 'eula.txt'), 'eula=true\n');
 
-    // Write ALL config files unconditionally before every boot.
-    // Spigot 1.8 will NOT regenerate a file that already exists with a valid
-    // config-version header — so writing them here means our values survive.
+    // Write ALL config files unconditionally before every boot so the server
+    // never regenerates defaults over our values.
     await this._rewriteConfigs();
-
-    // For the play server, delete any stale world so it always regenerates
-    // with our current generator-settings (correct flat layers at FLOOR_Y).
-    if (this._isPlayServer) {
-      for (const worldDir of ['world', 'world_nether', 'world_the_end']) {
-        const p = path.join(this.serverDir, worldDir);
-        if (await fs.pathExists(p)) {
-          await fs.remove(p);
-          log.step('Server', `deleted stale world: ${worldDir}`);
-        }
-      }
-    } else {
-      // For the training server, delete the world only once if it was generated
-      // with the old broken generator-settings (sentinel file tracks this).
-      const sentinel = path.join(this.serverDir, '.world_gen_v5');
-      if (!await fs.pathExists(sentinel)) {
-        for (const worldDir of ['world', 'world_nether', 'world_the_end']) {
-          const p = path.join(this.serverDir, worldDir);
-          if (await fs.pathExists(p)) {
-            await fs.remove(p);
-            log.step('Server', `deleted old-generator world: ${worldDir}`);
-          }
-        }
-        await fs.writeFile(sentinel, 'flat-default-no-generator-settings\n');
-        log.step('Server', 'wrote world gen sentinel v5');
-      }
-    }
   }
 
   /**
@@ -201,7 +173,7 @@ class ServerManager {
       `rcon.port=${this.rconPort}`,
       `rcon.password=${cfg.RCON_PASSWORD}`,
       `online-mode=false`,
-      `max-players=10`,
+      `max-players=20`,
       `view-distance=${this._isPlayServer ? 10 : 2}`,
       `pvp=true`,
       `difficulty=1`,
@@ -527,52 +499,24 @@ aliases: now-in-commands.yml
       'gamerule doEntityDrops false',
       'gamerule showDeathMessages false',
       'time set 6000',
-      // Set world spawn to zone 0 so players respawn near the fight area,
-      // not at default 0,64,0 in what may be void or far away.
-      `setworldspawn 0 ${cfg.ZONE.FLOOR_Y} 0`,
+      `setworldspawn -419 ${cfg.ZONE.FLOOR_Y} 130`,
     ]);
-
-    // Safety net: build a stone platform at the fight area for zone 0.
-    // This guarantees a solid surface even if generator-settings was wrong.
-    // For training, zone 0 is always used (PARALLEL_ZONES=1); play only
-    // uses zone 0 as well.
-    await this._buildFloor(0);
   }
 
-  /**
-   * Build a stone platform for the given zone.
-   * The floor is placed one block below FLOOR_Y (the Y players stand on).
-   * Platform stretches from (ox - 5) to (ox + FIGHTER_SEP + 5) in X,
-   * and -5 to +5 in Z — plenty of room for two fighters.
-   */
-  async _buildFloor(zoneId) {
-    const ox = zoneId * cfg.ZONE.SPACING;
-    const floorBlock = cfg.ZONE.FLOOR_Y - 1;   // block the players stand ON
-    const x1 = ox - 5;
-    const x2 = ox + cfg.ZONE.FIGHTER_SEP + 5;
-    const z1 = -5;
-    const z2 = 5;
-    // /fill can only do 32768 blocks per call, our platform is at most
-    // ~21 × 11 × 1 = 231 blocks — well within the limit.
-    await this.sendCommand(
-      `fill ${x1} ${floorBlock} ${z1} ${x2} ${floorBlock} ${z2} minecraft:stone`,
-    );
-    // Also place bedrock one layer below for good measure
-    await this.sendCommand(
-      `fill ${x1} ${floorBlock - 1} ${z1} ${x2} ${floorBlock - 1} ${z2} minecraft:bedrock`,
-    );
-    log.step('Server', `built floor for zone ${zoneId} at y=${floorBlock}`);
+  // Arena-aware spawn helpers.  arenaId = 0..63 (see cfg.ARENAS).
+  // Falls back to arena 0 if out of range.
+  static spawnA(arenaId = 0) {
+    const arena = cfg.ARENAS[arenaId] ?? cfg.ARENAS[0];
+    return { ...arena.A };
+  }
+  static spawnB(arenaId = 0) {
+    const arena = cfg.ARENAS[arenaId] ?? cfg.ARENAS[0];
+    return { ...arena.B };
   }
 
-  static zoneSpawnA(zoneId) {
-    const ox = zoneId * cfg.ZONE.SPACING;
-    return { x: ox + 0.5, y: cfg.ZONE.FLOOR_Y, z: 0.5, yaw: 90 };
-  }
-
-  static zoneSpawnB(zoneId) {
-    const ox = zoneId * cfg.ZONE.SPACING;
-    return { x: ox + cfg.ZONE.FIGHTER_SEP + 0.5, y: cfg.ZONE.FLOOR_Y, z: 0.5, yaw: 270 };
-  }
+  // Legacy helpers kept for play.js compatibility
+  static zoneSpawnA(arenaId) { return ServerManager.spawnA(arenaId); }
+  static zoneSpawnB(arenaId) { return ServerManager.spawnB(arenaId); }
 }
 
 module.exports = { ServerManager };

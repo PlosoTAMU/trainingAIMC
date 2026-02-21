@@ -1,5 +1,5 @@
 // src/train.js
-// Genetic algorithm training loop - SEQUENTIAL VERSION
+// Genetic algorithm training loop — PARALLEL INSTANCE VERSION
 
 const fs = require('fs-extra');
 const path = require('path');
@@ -15,24 +15,21 @@ const log = require('./logger');
 const { TRAINING, BOXING } = cfg;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// Global state
-let server = null;
-
-// Monotonically increasing fight ID to guarantee unique bot names
+// One ServerManager per parallel instance slot
+const instances = [];       // instances[i] = ServerManager
 let fightCounter = 0;
+
+// ── Startup ────────────────────────────────────────────────────────────────
 
 async function main() {
   log.info('Main', `═══ Training session started (pid=${process.pid}) ═══`);
   log.info('Main', `Log file: ${log.LOG_FILE}`);
   console.log(chalk.bold.cyan('\n⚔  MC 1.8 PvP AI Trainer  ⚔\n'));
+  console.log(chalk.gray(`Parallel instances: ${TRAINING.PARALLEL_INSTANCES}`));
+  console.log(chalk.gray(`Population size:    ${TRAINING.POP_SIZE}`));
 
-  server = new ServerManager();
-  console.log(chalk.gray('Starting training server...'));
-  await server.start();
-
-  // Wait for server to fully stabilize
-  console.log(chalk.gray('Waiting for server to stabilize...'));
-  await sleep(5000);
+  // Boot all server instances in parallel
+  await bootInstances();
 
   let generation = 0;
   let population = [];
@@ -61,12 +58,12 @@ async function main() {
 
     const scores = await evaluatePopulation(population);
 
-    const ranked = population.map((w, i) => ({ weights: w, score: scores[i] }))
+    const ranked = population
+      .map((w, i) => ({ weights: w, score: scores[i] }))
       .sort((a, b) => b.score - a.score);
 
     const bestScore = ranked[0].score;
     const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
-
     console.log(chalk.green(`\nBest: ${bestScore.toFixed(1)}  Avg: ${avgScore.toFixed(1)}`));
 
     if (generation % TRAINING.SAVE_EVERY_N_GENS === 0) {
@@ -77,42 +74,99 @@ async function main() {
   }
 }
 
+// ── Instance management ────────────────────────────────────────────────────
+
+async function bootInstances() {
+  console.log(chalk.gray(`Booting ${TRAINING.PARALLEL_INSTANCES} server instance(s)...`));
+
+  const boots = [];
+  for (let i = 0; i < TRAINING.PARALLEL_INSTANCES; i++) {
+    const port     = cfg.SERVER_PORT      + i * TRAINING.PORT_STRIDE;
+    const rconPort = cfg.RCON_PORT        + i * TRAINING.PORT_STRIDE;
+    const dir      = path.resolve(cfg.SERVER_DIR + (i === 0 ? '' : `_${i}`));
+
+    const sm = new ServerManager({ port, rconPort, serverDir: dir });
+    instances.push(sm);
+
+    boots.push(
+      sm.start()
+        .then(() => console.log(chalk.green(`  ✓ Instance ${i} ready (port ${port})`)))
+        .catch(e  => { log.error(`Boot:${i}`, 'failed to start', e); throw e; })
+    );
+  }
+
+  await Promise.all(boots);
+  console.log(chalk.gray('All instances ready — stabilizing 5s...\n'));
+  await sleep(5000);
+}
+
+// ── Population evaluation ──────────────────────────────────────────────────
+
 async function evaluatePopulation(population) {
   const scores = new Array(population.length).fill(0);
+  const N = TRAINING.PARALLEL_INSTANCES;
 
-  console.log(chalk.gray(`  Running ${population.length} fights sequentially...\n`));
+  // Build the fight schedule: agent i vs agent (i+1)%n
+  const schedule = population.map((_, i) => ({
+    idxA: i,
+    idxB: (i + 1) % population.length,
+  }));
 
-  for (let i = 0; i < population.length; i++) {
-    const oppIdx = (i + 1) % population.length;
+  console.log(chalk.gray(`  ${schedule.length} fights, ${N} at a time\n`));
 
-    process.stdout.write(chalk.gray(`  Fight ${i + 1}/${population.length}: Agent ${i} vs ${oppIdx}... `));
+  // Process in batches of N (one fight per instance slot)
+  for (let batchStart = 0; batchStart < schedule.length; batchStart += N) {
+    const batch = schedule.slice(batchStart, batchStart + N);
 
-    try {
-      const result = await runFight(population[i], population[oppIdx], i, oppIdx);
-      scores[result.idx] += result.score;
-      scores[result.oppIdx] += result.oppScore;
-      console.log(chalk.green(`${result.score}-${result.oppScore}`));
-    } catch (err) {
-      log.error('EvalPop', `fight ${i + 1} threw`, err);
-      console.log(chalk.red(`FAILED: ${err.message}`));
+    const results = await Promise.allSettled(
+      batch.map(({ idxA, idxB }, slot) => {
+        // Each fight in a batch uses a different arena to keep bots separated.
+        // Cycle through all 64 arenas across batches.
+        const arenaId = ((batchStart / N + slot) * 1) % cfg.ARENAS.length;
+        process.stdout.write(chalk.gray(
+          `  [inst${slot}|arena${arenaId}] Agent ${idxA} vs ${idxB}... `
+        ));
+        return runFight(
+          instances[slot],
+          population[idxA],
+          population[idxB],
+          idxA,
+          idxB,
+          arenaId,
+        );
+      })
+    );
+
+    for (const [j, res] of results.entries()) {
+      const { idxA, idxB } = batch[j];
+      if (res.status === 'fulfilled') {
+        const { score, oppScore } = res.value;
+        scores[idxA] += score;
+        scores[idxB] += oppScore;
+        console.log(chalk.green(`${score}-${oppScore}`));
+      } else {
+        log.error('EvalPop', `batch fight ${batchStart + j} threw`, res.reason);
+        console.log(chalk.red(`FAILED: ${res.reason?.message}`));
+      }
     }
 
-    // Cooldown between fights
-    await sleep(2000);
+    // Brief cooldown between batches
+    await sleep(1500);
   }
 
   return scores;
 }
 
-async function runFight(weightsA, weightsB, idxA, idxB) {
-  const spawnA = ServerManager.zoneSpawnA(0);
-  const spawnB = ServerManager.zoneSpawnB(0);
+// ── Single fight ───────────────────────────────────────────────────────────
 
-  // Unique names per fight to avoid collisions with stale sessions
+async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
   fightCounter++;
   const nameA = `A${fightCounter}`;
   const nameB = `B${fightCounter}`;
-  const FTAG = `FIGHT:${fightCounter}`;
+  const FTAG  = `FIGHT:${fightCounter}`;
+
+  const spawnA = ServerManager.spawnA(arenaId);
+  const spawnB = ServerManager.spawnB(arenaId);
 
   let botA = null;
   let botB = null;
@@ -120,137 +174,88 @@ async function runFight(weightsA, weightsB, idxA, idxB) {
   try {
     log.step(FTAG, `starting — agents ${idxA} vs ${idxB}, names ${nameA}/${nameB}`);
 
-    // Kick any leftover players from previous fights (belt-and-suspenders)
-    log.step(FTAG, 'pre-kicking any stale sessions');
-    await server.rconBatch([
-      `kick ${nameA} reset`,
-      `kick ${nameB} reset`,
-    ]);
-    await sleep(500);
+    await server.rconBatch([`kick ${nameA} reset`, `kick ${nameB} reset`]);
+    await sleep(300);
 
-    // Connect bot A with retry
-    log.step(FTAG, `connecting ${nameA}`);
     botA = await connectBotWithRetry({
       host: '127.0.0.1',
-      port: cfg.SERVER_PORT,
+      port: server.port,
       username: nameA,
       weights: weightsA,
       zoneOriginX: 0,
     });
-    log.step(FTAG, `${nameA} connected`);
-
-    // Stagger connections to avoid overwhelming the server
-    await sleep(2000);
-
-    // Connect bot B with retry
-    log.step(FTAG, `connecting ${nameB}`);
+    await sleep(1500);
     botB = await connectBotWithRetry({
       host: '127.0.0.1',
-      port: cfg.SERVER_PORT,
+      port: server.port,
       username: nameB,
       weights: weightsB,
       zoneOriginX: 0,
     });
-    log.step(FTAG, `${nameB} connected`);
 
-    // Setup arena
-    log.step(FTAG, 'setting up arena via RCON');
-    await sleep(1500);
+    await sleep(1000);
     await server.rconBatch([
       `gamemode 2 ${nameA}`,
       `gamemode 2 ${nameB}`,
-      `tp ${nameA} ${spawnA.x} ${spawnA.y} ${spawnA.z}`,
-      `tp ${nameB} ${spawnB.x} ${spawnB.y} ${spawnB.z}`,
+      `tp ${nameA} ${spawnA.x} ${spawnA.y} ${spawnA.z} ${spawnA.yaw} 0`,
+      `tp ${nameB} ${spawnB.x} ${spawnB.y} ${spawnB.z} ${spawnB.yaw} 0`,
       `clear ${nameA}`,
       `clear ${nameB}`,
       `give ${nameA} diamond_sword 1 0 {Unbreakable:1}`,
       `give ${nameB} diamond_sword 1 0 {Unbreakable:1}`,
       `effect ${nameA} instant_health 1 255 true`,
       `effect ${nameB} instant_health 1 255 true`,
+      // Infinite resistance (level 5 = immune to all damage) so bots
+      // never accidentally die and leave the fight early.
+      `effect ${nameA} resistance 9999 4 true`,
+      `effect ${nameB} resistance 9999 4 true`,
     ]);
 
-    // Start fight
-    log.step(FTAG, 'starting fight');
-    await sleep(500);
+    await sleep(400);
     botA.startFighting();
     botB.startFighting();
 
-    // Wait for fight duration
-    log.step(FTAG, `waiting ${BOXING.HIT_TIMEOUT_MS}ms for fight to complete`);
     await sleep(BOXING.HIT_TIMEOUT_MS);
 
-    // Stop fighting before reading results
     botA.stopFighting();
     botB.stopFighting();
 
-    // Get results
     const hitsA = botA.getHits().myHits;
     const hitsB = botB.getHits().myHits;
-    log.step(FTAG, `fight complete — ${nameA}:${hitsA} hits, ${nameB}:${hitsB} hits`);
+    log.step(FTAG, `done — ${nameA}:${hitsA} ${nameB}:${hitsB}`);
 
-    return {
-      idx: idxA,
-      oppIdx: idxB,
-      score: hitsA,
-      oppScore: hitsB,
-    };
+    return { score: hitsA, oppScore: hitsB };
 
   } finally {
-    log.step(FTAG, 'finally — cleaning up bots');
-
-    // ALWAYS cleanup — disconnect bots first, then force-kick via RCON
-    if (botA) {
-      try { botA.stopFighting(); } catch {}
-      try { botA.disconnect(); } catch (e) { log.warn(FTAG, `botA disconnect error: ${e.message}`); }
-    }
-    if (botB) {
-      try { botB.stopFighting(); } catch {}
-      try { botB.disconnect(); } catch (e) { log.warn(FTAG, `botB disconnect error: ${e.message}`); }
-    }
-
-    // Force-kick via RCON in case bot.quit() didn't reach the server
-    await sleep(500);
-    log.step(FTAG, 'RCON force-kick');
+    if (botA) { try { botA.stopFighting(); botA.disconnect(); } catch {} }
+    if (botB) { try { botB.stopFighting(); botB.disconnect(); } catch {} }
+    await sleep(400);
     await server.rconBatch([
       `kick ${nameA} cleanup`,
       `kick ${nameB} cleanup`,
-    ]).catch((e) => log.warn(FTAG, `RCON kick failed: ${e.message}`));
-
-    // Wait for server to fully process disconnections
-    log.step(FTAG, 'waiting 2s for server to process disconnections');
-    await sleep(2000);
-    log.step(FTAG, 'cleanup complete');
+    ]).catch(() => {});
+    await sleep(1000);
+    log.step(FTAG, 'cleanup done');
   }
 }
 
-/**
- * Attempt to connect a bot with retries.
- * ECONNRESET on initial connect is common if the server is still
- * processing a previous disconnection.
- */
+// ── Helpers ────────────────────────────────────────────────────────────────
+
 async function connectBotWithRetry(opts, maxRetries = 3) {
   const TAG = `CONNECT:${opts.username}`;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    log.step(TAG, `attempt ${attempt}/${maxRetries}`);
     try {
-      const ctrl = await createBot(opts);
-      log.step(TAG, `success on attempt ${attempt}`);
-      return ctrl;
+      return await createBot(opts);
     } catch (err) {
       log.error(TAG, `attempt ${attempt} failed`, err);
-      const isRetryable = (
+      const retryable =
         err.message.includes('ECONNRESET') ||
         err.message.includes('ECONNREFUSED') ||
         err.message.includes('timeout') ||
-        err.message.includes('Timed out')
-      );
-      if (attempt < maxRetries && isRetryable) {
-        const delay = 3000 * attempt;
-        log.step(TAG, `retryable error — waiting ${delay}ms`);
-        console.log(chalk.yellow(`    Retry ${attempt}/${maxRetries} for ${opts.username}: ${err.message}`));
-        await sleep(delay);
+        err.message.includes('Timed out');
+      if (attempt < maxRetries && retryable) {
+        await sleep(3000 * attempt);
       } else {
-        log.error(TAG, `giving up after ${attempt} attempts`, err);
         throw err;
       }
     }
@@ -261,16 +266,11 @@ function evolve(ranked) {
   const topN = Math.floor(ranked.length * TRAINING.TOP_FRACTION);
   const elite = ranked.slice(0, topN);
   const newPop = [];
-
-  for (const { weights } of elite) {
-    newPop.push(new Float64Array(weights));
-  }
-
+  for (const { weights } of elite) newPop.push(new Float64Array(weights));
   while (newPop.length < TRAINING.POP_SIZE) {
     const parent = elite[Math.floor(Math.random() * elite.length)].weights;
     newPop.push(mutate(parent));
   }
-
   return newPop;
 }
 
@@ -290,74 +290,47 @@ async function saveGeneration(gen, ranked, bestScore) {
     bestScore,
     population: ranked.map(r => nn.toJSON(r.weights)),
   };
-
   await fs.ensureDir(cfg.TRAINING.WEIGHTS_DIR);
   await fs.writeJSON(
-    path.join(cfg.TRAINING.WEIGHTS_DIR, `gen_${gen}.json`),
-    data,
-    { spaces: 2 }
-  );
-
+    path.join(cfg.TRAINING.WEIGHTS_DIR, `gen_${gen}.json`), data, { spaces: 2 });
   await fs.writeJSON(
     path.join(cfg.TRAINING.WEIGHTS_DIR, 'champion.json'),
-    {
-      generation: gen,
-      score: bestScore,
-      weights: nn.toJSON(ranked[0].weights),
-    },
-    { spaces: 2 }
-  );
-
+    { generation: gen, score: bestScore, weights: nn.toJSON(ranked[0].weights) },
+    { spaces: 2 });
   console.log(chalk.gray(`  Saved generation ${gen}`));
 }
 
 async function findLatestWeights() {
   const dir = cfg.TRAINING.WEIGHTS_DIR;
   if (!await fs.pathExists(dir)) return null;
-
   const files = (await fs.readdir(dir))
     .filter(f => f.startsWith('gen_') && f.endsWith('.json'))
-    .sort((a, b) => {
-      const aNum = parseInt(a.match(/\d+/)[0]);
-      const bNum = parseInt(b.match(/\d+/)[0]);
-      return bNum - aNum;
-    });
-
+    .sort((a, b) => parseInt(b.match(/\d+/)[0]) - parseInt(a.match(/\d+/)[0]));
   return files.length > 0 ? path.join(dir, files[0]) : null;
 }
 
-// Cleanup on exit
-process.on('SIGINT', async () => {
+// ── Shutdown ───────────────────────────────────────────────────────────────
+
+async function shutdown() {
   console.log(chalk.yellow('\n\nShutting down...'));
-  if (server) await server.stop();
+  await Promise.allSettled(instances.map(sm => sm.stop()));
   process.exit(0);
-});
+}
 
-process.on('SIGTERM', async () => {
-  if (server) await server.stop();
-  process.exit(0);
-});
+process.on('SIGINT',  shutdown);
+process.on('SIGTERM', shutdown);
 
-// Catch stray unhandled rejections (e.g. ECONNRESET from sockets closing)
-// so they don't crash the training loop
-process.on('unhandledRejection', (reason, promise) => {
-  const msg = reason && reason.message ? reason.message : String(reason);
-  // Always log to file with full stack; only suppress console noise for known-safe errors
-  log.error('UnhandledRejection', 'caught unhandled rejection', reason instanceof Error ? reason : new Error(msg));
-  if (
-    msg.includes('ECONNRESET') ||
-    msg.includes('ECONNREFUSED') ||
-    msg.includes('This socket has been ended') ||
-    msg.includes('write after end')
-  ) {
-    // These are expected during bot disconnect cycles — already logged above
-  } else {
+process.on('unhandledRejection', (reason) => {
+  const msg = reason?.message ?? String(reason);
+  log.error('UnhandledRejection', 'caught', reason instanceof Error ? reason : new Error(msg));
+  if (!msg.includes('ECONNRESET') && !msg.includes('ECONNREFUSED') &&
+      !msg.includes('This socket has been ended') && !msg.includes('write after end')) {
     console.error(chalk.yellow('[Unhandled Rejection]'), msg);
   }
 });
 
 process.on('uncaughtException', (err) => {
-  log.error('UncaughtException', 'UNCAUGHT EXCEPTION — process will exit', err);
+  log.error('UncaughtException', 'UNCAUGHT — exiting', err);
   console.error(chalk.red('[UncaughtException]'), err);
   process.exit(1);
 });

@@ -57,12 +57,13 @@ function decide(weights, inputs) {
   }
 
   return [
-    out[0] > 0.5,
-    out[1] > 0.5,
-    out[2] > 0.5,
-    out[3] > 0.5,
-    out[4] > 0.5,
-    out[5] > 0.5,
+    out[0] > 0.5,   // fwd
+    out[1] > 0.5,   // back
+    out[2] > 0.5,   // left
+    out[3] > 0.5,   // right
+    out[4] > 0.5,   // jump
+    out[5] > 0.5,   // attack
+    out[6] > 0.5,   // block
   ];
 }
 
