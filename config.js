@@ -104,17 +104,25 @@ module.exports = {
     POP_SIZE: 64,                    // must = ACTIVE_ARENAS * 2
     FIGHTS_PER_AGENT: 1,
     TOP_FRACTION: 0.25,              // stronger selection pressure = faster convergence
-    MUTATION_RATE: 0.15,             // more exploration from fresh start
-    MUTATION_STRENGTH: 0.4,
+    MUTATION_RATE: 0.25,             // more exploration from fresh start
+    MUTATION_STRENGTH: 1.0,
+  
+    // NEW: Adaptive mutation (we'll use these in train.js)
+    MUTATION_DECAY: 0.995,      // Slowly reduce mutation over generations
+    MUTATION_FLOOR: 0.08,       // Never go below this rate
+    
+    // NEW: Diversity pressure
+    TOP_FRACTION: 0.2,          // Keep top 20% as parents (was maybe higher)
+    TOURNAMENT_SIZE: 4,         // For tournament selection
     SAVE_EVERY_N_GENS: 10,           // full population snapshot every 10 gens
     WEIGHTS_DIR: resolveWeightsDir(),
   },
 
   // ── Neural network ─────────────────────────────────────────────────────────
   NN: {
-    INPUTS: 14,
-    HIDDEN1: 32,
-    HIDDEN2: 24,
+    INPUTS: 17,
+    HIDDEN1: 24,
+    HIDDEN2: 16,
     OUTPUTS: 9,   // fwd, back, left, right, jump, attack, sprint
     DECISION_HZ: 20,  // 20 decisions/sec — richer signal per fight
   },

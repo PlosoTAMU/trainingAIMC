@@ -36,47 +36,59 @@ function buildInputs(selfBot, oppEntity, zoneOriginX, myHits, oppHits) {
   const sp = selfBot.entity.position;
   const sv = selfBot.entity.velocity;
 
-  // If opponent not visible, assume they're 10 blocks ahead on Z
   const opPos = oppEntity ? oppEntity.position : { x: sp.x, y: sp.y, z: sp.z + 10 };
   const opVel = oppEntity ? oppEntity.velocity : { x: 0, y: 0, z: 0 };
 
-  // Relative position to opponent (what actually matters for PvP)
+  // Relative position to opponent
   const relX = opPos.x - sp.x;
   const relY = opPos.y - sp.y;
   const relZ = opPos.z - sp.z;
   const dist = Math.sqrt(relX*relX + relY*relY + relZ*relZ) || 1;
 
-  // Normalised direction to opponent (-1..1 per axis)
-  const dirX = clamp1(relX / 20);   // saturates at 20 blocks
+  const dirX = clamp1(relX / 20);
   const dirZ = clamp1(relZ / 20);
-
-  // Distance input: 0 = touching, 1 = 20+ blocks away
   const distNorm = clamp1(dist / 20);
 
-  // Relative velocity of opponent vs self (are they closing or fleeing?)
   const relVX = clamp1((opVel.x - sv.x) / 5);
   const relVZ = clamp1((opVel.z - sv.z) / 5);
 
+  // ─── NEW: Angle to opponent relative to where we're looking ────
+  const angleToOpp = Math.atan2(-relX, relZ); // Minecraft yaw convention
+  const yawDiff = wrapPi(selfBot.entity.yaw - angleToOpp);
+  const facingOpp = clamp1(yawDiff / Math.PI); // -1 = opp on left, +1 = opp on right, 0 = facing them
+
+  // ─── NEW: Pitch relative to opponent (are they above/below?) ───
+  const vertAngleToOpp = Math.atan2(relY, Math.sqrt(relX*relX + relZ*relZ));
+  const pitchDiff = clamp1((selfBot.entity.pitch - vertAngleToOpp) / (Math.PI / 2));
+
+  // ─── NEW: Current pitch (to help avoid looking at sky) ─────────
+  const currentPitch = clamp1(selfBot.entity.pitch / (Math.PI / 2));
+
   return [
-    // ── Self state ────────────────────────────────────────
-    clamp1(sv.x / 5),                          // 0  self velocity X
-    clamp1(sv.z / 5),                          // 1  self velocity Z
-    clamp1(sv.y / 10),                         // 2  self velocity Y (falling/jumping)
-    selfBot.entity.onGround   ? 1 : -1,        // 3  on ground
-    selfBot.entity.sprinting  ? 1 : -1,        // 4  sprinting
-    norm(selfBot.health, 0, 20),               // 5  own HP
+    // Self state (0-5)
+    clamp1(sv.x / 5),
+    clamp1(sv.z / 5),
+    clamp1(sv.y / 10),
+    selfBot.entity.onGround ? 1 : -1,
+    selfBot.entity.sprinting ? 1 : -1,
+    norm(selfBot.health, 0, 20),
 
-    // ── Opponent state ────────────────────────────────────
-    dirX,                                      // 6  direction to opp (X axis, normalised)
-    dirZ,                                      // 7  direction to opp (Z axis, normalised)
-    distNorm,                                  // 8  distance to opp (normalised)
-    relVX,                                     // 9  relative velocity X
-    relVZ,                                     // 10 relative velocity Z
-    oppEntity && oppEntity.onGround ? 1 : -1,  // 11 opp on ground (W-tap signal)
+    // Opponent relative state (6-11)
+    dirX,
+    dirZ,
+    distNorm,
+    relVX,
+    relVZ,
+    oppEntity && oppEntity.onGround ? 1 : -1,
 
-    // ── Fight progress ────────────────────────────────────
-    norm(myHits,  0, BOXING.HITS_TO_WIN),      // 12 my hit count progress
-    norm(oppHits, 0, BOXING.HITS_TO_WIN),      // 13 opp hit count progress
+    // Fight progress (12-13)
+    norm(myHits, 0, BOXING.HITS_TO_WIN),
+    norm(oppHits, 0, BOXING.HITS_TO_WIN),
+
+    // NEW: Aiming state (14-16)
+    facingOpp,      // How far off our yaw is from facing opponent
+    pitchDiff,      // How far off our pitch is from opponent's height
+    currentPitch,   // Raw pitch (penalize extremes)
   ];
 }
 

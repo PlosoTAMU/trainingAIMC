@@ -1,6 +1,12 @@
 // src/train.js
 // Genetic algorithm training loop — PARALLEL INSTANCE VERSION
 
+function wrapPi(a) {
+  while (a <= -Math.PI) a += Math.PI * 2;
+  while (a > Math.PI) a -= Math.PI * 2;
+  return a;
+}
+
 const fs = require('fs-extra');
 const path = require('path');
 const chalk = require('chalk');
@@ -148,7 +154,7 @@ async function main() {
       console.log(chalk.gray(`  💾 Champion saved (gen ${generation}, score ${bestScore.toFixed(1)}) → ${cfg.TRAINING.WEIGHTS_DIR}`));
     }
 
-    population = evolve(ranked);
+    population = evolve(ranked, generation);
   }
 }
 
@@ -308,40 +314,56 @@ async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
     const fightStart = Date.now();
     console.log(`${tag} ${chalk.bold.yellow('⚔  FIGHT START')} (timeout: ${BOXING.HIT_TIMEOUT_MS}ms)`);
 
-    // ── Reward shaping ───────────────────────────────────────────────────
-    // Keep your existing range Gaussian peak at 3 blocks [7], add:
-    //  - Aim reward if crosshair ray intersects enemy hitbox (always present)
-    //  - Click reward on leftClick, but replaced by big hit reward on hitLanded
-    //  - Flat punishment on hitTaken
-    //
-    // Note: previous comment said aim reward was invalid because bot.lookAt auto-aims [7],
-    // but we are removing bot.lookAt from attacks in bot.js [8].
+    /// ── Reward shaping ───────────────────────────────────────────────────
+    // 
+    // Goals:
+    //   1. Penalize standing still
+    //   2. Penalize looking at sky/ground (extreme pitch)
+    //   3. Reward facing the opponent
+    //   4. Reward closing distance when far, maintaining distance when close
+    //   5. Existing: range bonus, aim bonus, hit rewards
 
     const SAMPLE_INTERVAL = 200;
 
-    // Proximity peak shaping (same concept as your current gaussian, peak at 3) [7]
+    // Proximity shaping (peak at ideal melee range)
     const IDEAL_RANGE = 3.0;
     const RANGE_SIGMA = 1.5;
     const RANGE_BONUS = 0.6;
 
-    // Rewards
-    const R_AIM_SAMPLE = 0.15;
-    const R_LEFT_CLICK = 0.05;
-    const R_HIT_LANDED = 12.0;
-    const P_HIT_TAKEN  = 6.0;
+    // Movement shaping
+    const P_STATIONARY = 0.3;         // Penalty per sample for standing still
+    const MIN_MOVE_SPEED = 0.08;      // Below this = "stationary"
+
+    // Orientation shaping  
+    const P_EXTREME_PITCH = 0.2;      // Penalty for looking too far up/down
+    const EXTREME_PITCH_THRESH = Math.PI * 0.35;  // ~63 degrees
+    const R_FACING_OPPONENT = 0.2;    // Reward for yaw pointing toward enemy
+
+    // Combat rewards
+    const R_AIM_SAMPLE = 0.15;        // Crosshair on enemy hitbox
+    const R_LEFT_CLICK = 0.05;        // Attempted attack
+    const R_HIT_LANDED = 12.0;        // Successful hit
+    const P_HIT_TAKEN = 6.0;          // Got hit
+
+    // Approach/retreat shaping
+    const R_CLOSING_WHEN_FAR = 0.1;   // Reward for approaching when > 6 blocks
+    const FAR_THRESHOLD = 6.0;
 
     let rangeA = 0, rangeB = 0;
     let shapedA = 0, shapedB = 0;
     let pendingClickA = 0, pendingClickB = 0;
 
-    // Click shaping (requires bot.js to emit leftClick)
+    // Track previous positions for velocity calculation
+    let prevPosA = null, prevPosB = null;
+
+    // Click shaping
     botA.on('leftClick', () => { shapedA += R_LEFT_CLICK; pendingClickA++; });
     botB.on('leftClick', () => { shapedB += R_LEFT_CLICK; pendingClickB++; });
 
     // Hit shaping
     botA.on('hitLanded', () => {
       shapedA += R_HIT_LANDED;
-      if (pendingClickA > 0) { shapedA -= R_LEFT_CLICK; pendingClickA--; } // replace
+      if (pendingClickA > 0) { shapedA -= R_LEFT_CLICK; pendingClickA--; }
     });
     botB.on('hitLanded', () => {
       shapedB += R_HIT_LANDED;
@@ -357,10 +379,10 @@ async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
         const entB = botB.bot.entity;
         if (!entA || !entB) return;
 
-        // Range Gaussian (peak at IDEAL_RANGE) [7]
         const posA = entA.position;
         const posB = entB.position;
 
+        // ─── Distance & Range Gaussian ───────────────────────────────
         const dx = posA.x - posB.x;
         const dy = posA.y - posB.y;
         const dz = posA.z - posB.z;
@@ -373,12 +395,70 @@ async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
         rangeA += bonus;
         rangeB += bonus;
 
-        // Aim reward (always sampled)
+        // ─── Movement Penalty (STANDING STILL) ───────────────────────
+        if (prevPosA) {
+          const moveA = Math.sqrt(
+            (posA.x - prevPosA.x) ** 2 + 
+            (posA.z - prevPosA.z) ** 2
+          );
+          if (moveA < MIN_MOVE_SPEED) {
+            shapedA -= P_STATIONARY;
+          }
+        }
+        if (prevPosB) {
+          const moveB = Math.sqrt(
+            (posB.x - prevPosB.x) ** 2 + 
+            (posB.z - prevPosB.z) ** 2
+          );
+          if (moveB < MIN_MOVE_SPEED) {
+            shapedB -= P_STATIONARY;
+          }
+        }
+        prevPosA = posA.clone();
+        prevPosB = posB.clone();
+
+        // ─── Extreme Pitch Penalty (LOOKING AT SKY/GROUND) ───────────
+        if (Math.abs(entA.pitch) > EXTREME_PITCH_THRESH) {
+          shapedA -= P_EXTREME_PITCH;
+        }
+        if (Math.abs(entB.pitch) > EXTREME_PITCH_THRESH) {
+          shapedB -= P_EXTREME_PITCH;
+        }
+
+        // ─── Facing Opponent Reward ──────────────────────────────────
+        // Calculate angle between where bot is looking and where opponent is
+        const angleToOppA = Math.atan2(-(posB.x - posA.x), posB.z - posA.z);
+        const angleToOppB = Math.atan2(-(posA.x - posB.x), posA.z - posB.z);
+        
+        const yawDiffA = Math.abs(wrapPi(entA.yaw - angleToOppA));
+        const yawDiffB = Math.abs(wrapPi(entB.yaw - angleToOppB));
+        
+        // Reward scales: 1.0 when perfectly facing, 0.0 when looking away
+        const facingBonusA = R_FACING_OPPONENT * (1 - yawDiffA / Math.PI);
+        const facingBonusB = R_FACING_OPPONENT * (1 - yawDiffB / Math.PI);
+        shapedA += facingBonusA;
+        shapedB += facingBonusB;
+
+        // ─── Approach Reward (when far away) ─────────────────────────
+        if (dist > FAR_THRESHOLD && prevPosA && prevPosB) {
+          // Did A get closer to B?
+          const prevDistA = Math.sqrt(
+            (prevPosA.x - posB.x) ** 2 + (prevPosA.z - posB.z) ** 2
+          );
+          if (dist < prevDistA) shapedA += R_CLOSING_WHEN_FAR;
+          
+          const prevDistB = Math.sqrt(
+            (prevPosB.x - posA.x) ** 2 + (prevPosB.z - posA.z) ** 2
+          );
+          if (dist < prevDistB) shapedB += R_CLOSING_WHEN_FAR;
+        }
+
+        // ─── Aim Reward (crosshair on enemy hitbox) ──────────────────
         if (crosshairOnEnemy(entA, entB)) shapedA += R_AIM_SAMPLE;
         if (crosshairOnEnemy(entB, entA)) shapedB += R_AIM_SAMPLE;
+
       } catch {}
     }, SAMPLE_INTERVAL);
-
     await sleep(BOXING.HIT_TIMEOUT_MS);
 
     clearInterval(proximitySampler);
@@ -450,23 +530,86 @@ async function connectBotWithRetry(opts, maxRetries = 3) {
   }
 }
 
-function evolve(ranked) {
-  const topN = Math.floor(ranked.length * TRAINING.TOP_FRACTION);
-  const elite = ranked.slice(0, topN);
+function evolve(ranked, generation) {
   const newPop = [];
-  for (const { weights } of elite) newPop.push(new Float32Array(weights));
-  while (newPop.length < TRAINING.POP_SIZE) {
-    const parent = elite[Math.floor(Math.random() * elite.length)].weights;
-    newPop.push(mutate(parent));
+  
+  // ─── Adaptive Mutation ─────────────────────────────────────────
+  // Start high, decay over generations to fine-tune later
+  const mutRate = Math.max(
+    TRAINING.MUTATION_FLOOR,
+    TRAINING.MUTATION_RATE * Math.pow(TRAINING.MUTATION_DECAY, generation)
+  );
+  const mutStrength = TRAINING.MUTATION_STRENGTH * (0.5 + 0.5 * (mutRate / TRAINING.MUTATION_RATE));
+  
+  console.log(chalk.gray(`  Mutation: rate=${(mutRate*100).toFixed(1)}% strength=${mutStrength.toFixed(2)}`));
+
+  // ─── Elitism: Keep top performers unchanged ────────────────────
+  const eliteCount = Math.max(2, Math.floor(ranked.length * 0.05)); // Top 5%
+  for (let i = 0; i < eliteCount; i++) {
+    newPop.push(new Float32Array(ranked[i].weights));
   }
+
+  // ─── Tournament Selection + Crossover + Mutation ───────────────
+  while (newPop.length < TRAINING.POP_SIZE) {
+    const parent1 = tournamentSelect(ranked, TRAINING.TOURNAMENT_SIZE || 4);
+    const parent2 = tournamentSelect(ranked, TRAINING.TOURNAMENT_SIZE || 4);
+    
+    // 70% chance of crossover, 30% chance of just mutating one parent
+    let child;
+    if (Math.random() < 0.7) {
+      child = crossover(parent1.weights, parent2.weights);
+    } else {
+      child = new Float32Array(parent1.weights);
+    }
+    
+    newPop.push(mutate(child, mutRate, mutStrength));
+  }
+
   return newPop;
 }
 
-function mutate(weights) {
+function tournamentSelect(ranked, k) {
+  let best = null;
+  for (let i = 0; i < k; i++) {
+    const idx = Math.floor(Math.random() * ranked.length);
+    if (!best || ranked[idx].score > best.score) {
+      best = ranked[idx];
+    }
+  }
+  return best;
+}
+
+function crossover(weights1, weights2) {
+  const child = new Float32Array(weights1.length);
+  
+  // Uniform crossover with some contiguous segments
+  const segmentSize = Math.floor(weights1.length / 10);
+  let useParent1 = Math.random() < 0.5;
+  
+  for (let i = 0; i < weights1.length; i++) {
+    // Switch parents occasionally (creates contiguous gene segments)
+    if (i % segmentSize === 0 && Math.random() < 0.3) {
+      useParent1 = !useParent1;
+    }
+    // Per-gene crossover chance
+    if (Math.random() < 0.1) {
+      useParent1 = !useParent1;
+    }
+    
+    child[i] = useParent1 ? weights1[i] : weights2[i];
+  }
+  return child;
+}
+
+function mutate(weights, rate, strength) {
   const child = new Float32Array(weights);
   for (let i = 0; i < child.length; i++) {
-    if (Math.random() < TRAINING.MUTATION_RATE) {
-      child[i] += (Math.random() - 0.5) * TRAINING.MUTATION_STRENGTH;
+    if (Math.random() < rate) {
+      // Gaussian-ish mutation (sum of uniforms approximates normal)
+      const noise = (Math.random() + Math.random() + Math.random() - 1.5) * strength;
+      child[i] += noise;
+      // Soft clamp to prevent weight explosion
+      child[i] = Math.max(-3, Math.min(3, child[i]));
     }
   }
   return child;
