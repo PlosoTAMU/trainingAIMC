@@ -36,31 +36,26 @@ module.exports = {
     '-jar',
   ],
 
-  // ── Arena layout ───────────────────────────────────────────────────────────
-  // 64 arenas in an 8×8 grid, coordinates computed from emeraldfinder.py.
-  // Bot1 (A) and Bot2 (B) always face each other across the Z axis (yaw 0/180).
-  // Y = 102 (top of the upgraded world's platform).
-  // Formula (matches emeraldfinder.py exactly):
-  //   initial = [-419.5, 130.5]
-  //   xvalue  = initial[0] + 60 * i          (i = 0..7, column)
-  //   z_A     = initial[1] - 60 * j          (j = 0..7, row)  — Bot 1
-  //   z_B     = initial[1] - 20 * j                           — Bot 2
   ARENAS: (() => {
-    const Y = 102;
-    const ix = -419.5, iz = 130.5;
-    const dx = 60, dz1 = 60, dz2 = 20;
-    const arenas = [];
-    for (let i = 0; i < 8; i++) {
-      const x = ix + dx * i;
-      for (let j = 0; j < 8; j++) {
-        arenas.push({
-          A: { x, y: Y, z: iz - dz1 * j, yaw: 180 },  // Bot A — faces -Z
-          B: { x, y: Y, z: iz - dz2 * j, yaw:   0 },  // Bot B — faces +Z
-        });
-      }
+  const Y = 102;
+  const ix = -419.5, iz = 130.5;
+  const offsetx = -60;  // -419.5 - (-359.5) = -60
+  const offsetz1 = 60;  // 130.5 - 70.5 = 60
+  const offsetz2 = 20;  // 130.5 - 110.5 = 20
+  const arenas = [];
+  for (let i = 0; i < 8; i++) {
+    const x = ix - offsetx * i;  // subtracting negative = adding
+    for (let j = 0; j < 8; j++) {
+      const zA = iz - offsetz1 * j;
+      const zB = zA - offsetz2;  // opponent is offsetz2 closer (20 blocks south)
+      arenas.push({
+        A: { x, y: Y, z: zA, yaw: 180 },  // Bot A
+        B: { x, y: Y, z: zB, yaw:   0 },  // Bot B
+      });
     }
-    return arenas;
-  })(),
+  }
+  return arenas;
+})(),
 
   // Keep ZONE for any play.js / legacy references
   ZONE: {

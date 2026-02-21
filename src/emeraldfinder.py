@@ -12,7 +12,7 @@ for i in range(8):
     xvalue = initial[0] - offsetx * i
     for j in range(8):
         zvalue = initial[1] - offsetz1 * j
-        opponentzvalue = initial[1] - offsetz2 * j
+        opponentzvalue = zvalue - offsetz2
         pairings.append({"Bot1": (xvalue, y, zvalue), "Bot2": (xvalue, y, opponentzvalue)})
 print(pairings)
 
