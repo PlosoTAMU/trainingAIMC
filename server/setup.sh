@@ -114,31 +114,38 @@ fi
 
 echo "  Node v$NODE_VER  ✓"
 
-# ── PaperMC 1.8.8 (1.8.9 clients work) ────────────────────────────────────
+# ── PaperMC 1.8.8 build 445 ────────────────────────────────────────────────
 echo ""
 if [ -f "$JAR_PATH" ]; then
   echo "Server jar already exists  ✓"
 else
-  echo "Downloading PaperMC 1.8.8..."
-  
-  # Attempt to download Paper via papermc.io API. If this fails, place a
-  # compatible paper-1.8.8 jar into this directory manually.
-  URL="https://papermc.io/api/v2/projects/paper/versions/1.8.8/builds/latest/downloads/paper-1.8.8.jar"
-  
+  echo "Downloading PaperMC 1.8.8 (build 445)..."
+
+  PAPER_BUILD=445
+  PAPER_SHA256="7ff6d2cec671ef0d95b3723b5c92890118fb882d73b7f8fa0a2cd31d97c55f86"
+  URL="https://api.papermc.io/v2/projects/paper/versions/1.8.8/builds/${PAPER_BUILD}/downloads/paper-1.8.8-${PAPER_BUILD}.jar"
+
   if command -v curl &> /dev/null; then
     curl -L -o "$JAR_PATH" "$URL" --progress-bar || {
-      echo "ERROR: Download failed. Please download paper-1.8.8.jar manually and place it at $JAR_PATH"
+      echo "ERROR: Download failed. Place paper-1.8.8.jar at $JAR_PATH manually."
       exit 1
     }
   elif command -v wget &> /dev/null; then
     wget -O "$JAR_PATH" "$URL" || {
-      echo "ERROR: Download failed. Please download paper-1.8.8.jar manually and place it at $JAR_PATH"
+      echo "ERROR: Download failed. Place paper-1.8.8.jar at $JAR_PATH manually."
       exit 1
     }
   fi
-  
-  echo "  Downloaded PaperMC 1.8.8  ✓"
-  echo "  (1.8.9 clients can connect)"
+
+  # Verify checksum
+  ACTUAL_SHA=$(sha256sum "$JAR_PATH" | awk '{print $1}')
+  if [ "$ACTUAL_SHA" != "$PAPER_SHA256" ]; then
+    echo "ERROR: SHA256 mismatch — expected $PAPER_SHA256, got $ACTUAL_SHA"
+    rm -f "$JAR_PATH"
+    exit 1
+  fi
+
+  echo "  Downloaded PaperMC 1.8.8 build ${PAPER_BUILD}  ✓"
 fi
 
 # ── npm install ──────────────────────────────────────────────────────────────
