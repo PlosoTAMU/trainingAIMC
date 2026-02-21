@@ -118,6 +118,7 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
     let oppHits = 0;
     let lastAttackTime = 0;
     let isDisconnected = false;
+    let attackClicks = 0;   // every swing attempt (whether it lands or not)
 
     // ── Socket-level error handler ─────────────────────────────────────────
     // Fires BEFORE spawn (connection errors) AND after spawn (mid-session errors).
@@ -249,6 +250,7 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
                 lastAttackTime = Date.now() + ping;
                 bot.lookAt(oppEntity.position.offset(0, 1.62, 0), true);
                 bot.attack(oppEntity);
+                attackClicks++;
               } catch {}
             });
           }
@@ -314,7 +316,7 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
       startFighting,
       stopFighting,
       disconnect,
-      getHits: () => ({ myHits, oppHits }),
+      getHits: () => ({ myHits, oppHits, attackClicks }),
       on: emitter.on.bind(emitter),
       once: emitter.once.bind(emitter),
       off: emitter.off.bind(emitter),
