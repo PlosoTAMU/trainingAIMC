@@ -19,10 +19,76 @@ const { TRAINING, BOXING } = cfg;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // One ServerManager per parallel instance slot
-const instances = [];       // instances[i] = ServerManager
+const instances = [];
 let fightCounter = 0;
 
-// ── Startup ────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Aim ray/hitbox shaping helpers (crosshair-on-enemy hitbox)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function forwardFromYawPitch(yaw, pitch) {
+  const cp = Math.cos(pitch);
+  return {
+    x: -Math.sin(yaw) * cp,
+    y: -Math.sin(pitch),
+    z:  Math.cos(yaw) * cp,
+  };
+}
+
+function rayIntersectsAABB(rayOrigin, rayDir, boxMin, boxMax, tMax) {
+  // Slab method
+  let tmin = 0;
+  let tmax = tMax;
+
+  for (const ax of ['x', 'y', 'z']) {
+    const o = rayOrigin[ax];
+    const d = rayDir[ax];
+    const min = boxMin[ax];
+    const max = boxMax[ax];
+
+    if (Math.abs(d) < 1e-8) {
+      if (o < min || o > max) return false;
+      continue;
+    }
+
+    const invD = 1 / d;
+    let t1 = (min - o) * invD;
+    let t2 = (max - o) * invD;
+    if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+
+    tmin = Math.max(tmin, t1);
+    tmax = Math.min(tmax, t2);
+    if (tmax < tmin) return false;
+  }
+  return true;
+}
+
+function crosshairOnEnemy(botEnt, enemyEnt) {
+  // Bot eye position
+  const eye = botEnt.position.offset(0, 1.62, 0);
+  const dir = forwardFromYawPitch(botEnt.yaw, botEnt.pitch);
+
+  // 1.8 player hitbox approximation
+  // width 0.6 (half-width 0.3), height 1.8
+  const hw = 0.3;
+  const min = enemyEnt.position.offset(-hw, 0, -hw);
+  const max = enemyEnt.position.offset(hw, 1.8, hw);
+
+  // Keep reward present always, but only true if ray intersects within trace distance.
+  // Using 4.5 to align with the bot's attack gating distance in bot.js [8].
+  const MAX_TRACE = 4.5;
+  return rayIntersectsAABB(
+    { x: eye.x, y: eye.y, z: eye.z },
+    dir,
+    { x: min.x, y: min.y, z: min.z },
+    { x: max.x, y: max.y, z: max.z },
+    MAX_TRACE
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Startup
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function main() {
   log.info('Main', `═══ Training session started (pid=${process.pid}) ═══`);
@@ -33,7 +99,6 @@ async function main() {
   console.log(chalk.gray(`Active arenas:      ${TRAINING.ACTIVE_ARENAS}`));
   console.log(chalk.gray(`Weights dir:        ${TRAINING.WEIGHTS_DIR}`));
 
-  // Boot all server instances in parallel
   await bootInstances();
 
   let generation = 0;
@@ -51,12 +116,9 @@ async function main() {
 
   if (population.length === 0) {
     console.log(chalk.yellow('Initializing random population...'));
-    for (let i = 0; i < TRAINING.POP_SIZE; i++) {
-      population.push(nn.randomWeights());
-    }
+    for (let i = 0; i < TRAINING.POP_SIZE; i++) population.push(nn.randomWeights());
   }
 
-  // Main training loop
   while (true) {
     generation++;
     console.log(chalk.bold.magenta(`\n═══ Generation ${generation} ═══\n`));
@@ -69,9 +131,8 @@ async function main() {
 
     const bestScore = ranked[0].score;
     const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
-    console.log(chalk.green(`\nBest: ${bestScore.toFixed(1)}  Avg: ${avgScore.toFixed(1)}`));
 
-    // Print top-5 leaderboard
+    console.log(chalk.green(`\nBest: ${bestScore.toFixed(1)}  Avg: ${avgScore.toFixed(1)}`));
     console.log(chalk.bold.white('\n  Top 5 agents this generation:'));
     ranked.slice(0, 5).forEach(({ score }, i) => {
       const medal = ['🥇','🥈','🥉','  4','  5'][i];
@@ -91,15 +152,17 @@ async function main() {
   }
 }
 
-// ── Instance management ────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Instance management
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function bootInstances() {
   console.log(chalk.gray(`Booting ${TRAINING.PARALLEL_INSTANCES} server instance(s)...`));
 
   const boots = [];
   for (let i = 0; i < TRAINING.PARALLEL_INSTANCES; i++) {
-    const port     = cfg.SERVER_PORT      + i * TRAINING.PORT_STRIDE;
-    const rconPort = cfg.RCON_PORT        + i * TRAINING.PORT_STRIDE;
+    const port     = cfg.SERVER_PORT + i * TRAINING.PORT_STRIDE;
+    const rconPort = cfg.RCON_PORT   + i * TRAINING.PORT_STRIDE;
     const dir      = path.resolve(cfg.SERVER_DIR + (i === 0 ? '' : `_${i}`));
 
     const sm = new ServerManager({ port, rconPort, serverDir: dir });
@@ -108,7 +171,7 @@ async function bootInstances() {
     boots.push(
       sm.start()
         .then(() => console.log(chalk.green(`  ✓ Instance ${i} ready (port ${port})`)))
-        .catch(e  => { log.error(`Boot:${i}`, 'failed to start', e); throw e; })
+        .catch(e => { log.error(`Boot:${i}`, 'failed to start', e); throw e; })
     );
   }
 
@@ -117,14 +180,15 @@ async function bootInstances() {
   await sleep(3000);
 }
 
-// ── Population evaluation ──────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Population evaluation
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function evaluatePopulation(population) {
   const scores = new Array(population.length).fill(0);
-  const server = instances[0];  // single server hosts all arenas
+  const server = instances[0];
   const activeArenas = TRAINING.ACTIVE_ARENAS;
 
-  // Pair agent i vs agent (i+1)%n — each pair gets its own arena slot.
   const schedule = population.map((_, i) => ({
     idxA: i,
     idxB: (i + 1) % population.length,
@@ -133,7 +197,6 @@ async function evaluatePopulation(population) {
 
   console.log(chalk.gray(`  ${schedule.length} fights firing simultaneously across ${activeArenas} arenas\n`));
 
-  // Fire ALL fights at once — each uses a different arena so bots never collide
   const results = await Promise.allSettled(
     schedule.map(({ idxA, idxB, arenaId }) =>
       runFight(server, population[idxA], population[idxB], idxA, idxB, arenaId)
@@ -155,20 +218,20 @@ async function evaluatePopulation(population) {
     }
   }
   console.log();
-  if (errCount > 0) {
-    console.log(chalk.red(`  ⚠  ${errCount}/${results.length} fights failed (see log for details)`));
-  } else {
-    console.log(chalk.gray(`  ✓ All ${results.length} fights completed`));
-  }
+  if (errCount > 0) console.log(chalk.red(`  ⚠  ${errCount}/${results.length} fights failed (see log for details)`));
+  else console.log(chalk.gray(`  ✓ All ${results.length} fights completed`));
 
   return scores;
 }
 
-// ── Single fight ───────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Single fight
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
   fightCounter++;
   const fightId = fightCounter;
+
   const nameA = `A${fightId}`;
   const nameB = `B${fightId}`;
   const FTAG  = `FIGHT:${fightId}`;
@@ -184,11 +247,11 @@ async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
     log.step(FTAG, `starting — agents ${idxA} vs ${idxB}, names ${nameA}/${nameB}`);
     console.log(`${tag} ${chalk.white(`Agent ${idxA} vs Agent ${idxB}`)} — connecting...`);
 
-    await server.rconBatch([`kick ${nameA} reset`, `kick ${nameB} reset`]);
+    await server.rconBatch([`kick ${nameA} reset`, `kick ${nameB} reset`]).catch(() => {});
     await sleep(100);
 
-    // Connect both bots concurrently — they go to different arenas so no collision
-    [botA, botB] = await Promise.all([
+    // Connect both bots concurrently
+    ;[botA, botB] = await Promise.all([
       connectBotWithRetry({
         host: '127.0.0.1',
         port: server.port,
@@ -207,29 +270,22 @@ async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
 
     console.log(`${tag} ${chalk.green('✓ Both bots connected')}`);
 
-    // Wire live hit events so we can see hits as they happen
-    let hitsLiveA = 0, hitsLiveB = 0;
-    botA.on('hitLanded', total => {
-      hitsLiveA = total;
-      process.stdout.write(chalk.green(`${tag}${nameA}→HIT(${total}) `));
-    });
-    botB.on('hitLanded', total => {
-      hitsLiveB = total;
-      process.stdout.write(chalk.yellow(`${tag}${nameB}→HIT(${total}) `));
-    });
-    botA.on('kicked', reason => {
-      console.log(`\n${tag} ${chalk.red(`${nameA} KICKED:`)} ${JSON.stringify(reason)}`);
-    });
-    botB.on('kicked', reason => {
-      console.log(`\n${tag} ${chalk.red(`${nameB} KICKED:`)} ${JSON.stringify(reason)}`);
-    });
+    // Live hit printing (existing behavior)
+    botA.on('hitLanded', total => process.stdout.write(chalk.green(`${tag}${nameA}→HIT(${total}) `)));
+    botB.on('hitLanded', total => process.stdout.write(chalk.yellow(`${tag}${nameB}→HIT(${total}) `)));
+    botA.on('kicked', reason => console.log(`\n${tag} ${chalk.red(`${nameA} KICKED:`)} ${JSON.stringify(reason)}`));
+    botB.on('kicked', reason => console.log(`\n${tag} ${chalk.red(`${nameB} KICKED:`)} ${JSON.stringify(reason)}`));
 
     await sleep(500);
+
+    // Setup: resistance + saturation + gear + tp
     await server.rconBatch([
       `gamemode 2 ${nameA}`,
       `gamemode 2 ${nameB}`,
       `effect ${nameA} resistance 9999 4 true`,
       `effect ${nameB} resistance 9999 4 true`,
+      `effect ${nameA} saturation 9999 255 true`,
+      `effect ${nameB} saturation 9999 255 true`,
       `tp ${nameA} ${spawnA.x} ${spawnA.y} ${spawnA.z} ${spawnA.yaw} 0`,
       `tp ${nameB} ${spawnB.x} ${spawnB.y} ${spawnB.z} ${spawnB.yaw} 0`,
       `clear ${nameA}`,
@@ -252,31 +308,58 @@ async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
     const fightStart = Date.now();
     console.log(`${tag} ${chalk.bold.yellow('⚔  FIGHT START')} (timeout: ${BOXING.HIT_TIMEOUT_MS}ms)`);
 
-    // ── Reward shaping ──────────────────────────────────────────────────────
-    // Sampled every SAMPLE_INTERVAL ms during the fight.
+    // ── Reward shaping ───────────────────────────────────────────────────
+    // Keep your existing range Gaussian peak at 3 blocks [7], add:
+    //  - Aim reward if crosshair ray intersects enemy hitbox (always present)
+    //  - Click reward on leftClick, but replaced by big hit reward on hitLanded
+    //  - Flat punishment on hitTaken
     //
-    //  RANGE bonus — Gaussian peak at IDEAL_RANGE (3.0 blocks).
-    //                Rewards staying at optimal 1.8 sword range.
-    //                σ=1.5 → ~60% bonus at 2–4 blocks, near-zero beyond 8.
-    //                The NN genuinely controls distance via movement outputs,
-    //                so this is a learnable signal.
-    //
-    //  NOTE: We do NOT reward aim — bot.lookAt() auto-aims on every attack tick,
-    //        so the NN has no control over yaw/pitch. Rewarding it would just be
-    //        free points for getting close.
+    // Note: previous comment said aim reward was invalid because bot.lookAt auto-aims [7],
+    // but we are removing bot.lookAt from attacks in bot.js [8].
 
-    const SAMPLE_INTERVAL = 500;
-    const IDEAL_RANGE     = 3.0;
-    const RANGE_SIGMA     = 1.5;
-    const RANGE_BONUS     = 0.6;   // max points per sample at ideal range
+    const SAMPLE_INTERVAL = 200;
+
+    // Proximity peak shaping (same concept as your current gaussian, peak at 3) [7]
+    const IDEAL_RANGE = 3.0;
+    const RANGE_SIGMA = 1.5;
+    const RANGE_BONUS = 0.6;
+
+    // Rewards
+    const R_AIM_SAMPLE = 0.15;
+    const R_LEFT_CLICK = 0.05;
+    const R_HIT_LANDED = 12.0;
+    const P_HIT_TAKEN  = 6.0;
 
     let rangeA = 0, rangeB = 0;
+    let shapedA = 0, shapedB = 0;
+    let pendingClickA = 0, pendingClickB = 0;
+
+    // Click shaping (requires bot.js to emit leftClick)
+    botA.on('leftClick', () => { shapedA += R_LEFT_CLICK; pendingClickA++; });
+    botB.on('leftClick', () => { shapedB += R_LEFT_CLICK; pendingClickB++; });
+
+    // Hit shaping
+    botA.on('hitLanded', () => {
+      shapedA += R_HIT_LANDED;
+      if (pendingClickA > 0) { shapedA -= R_LEFT_CLICK; pendingClickA--; } // replace
+    });
+    botB.on('hitLanded', () => {
+      shapedB += R_HIT_LANDED;
+      if (pendingClickB > 0) { shapedB -= R_LEFT_CLICK; pendingClickB--; }
+    });
+
+    botA.on('hitTaken', () => { shapedA -= P_HIT_TAKEN; });
+    botB.on('hitTaken', () => { shapedB -= P_HIT_TAKEN; });
 
     const proximitySampler = setInterval(() => {
       try {
-        const posA = botA.bot.entity?.position;
-        const posB = botB.bot.entity?.position;
-        if (!posA || !posB) return;
+        const entA = botA.bot.entity;
+        const entB = botB.bot.entity;
+        if (!entA || !entB) return;
+
+        // Range Gaussian (peak at IDEAL_RANGE) [7]
+        const posA = entA.position;
+        const posB = entB.position;
 
         const dx = posA.x - posB.x;
         const dy = posA.y - posB.y;
@@ -285,9 +368,14 @@ async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
 
         const gaussianRange = (d) =>
           Math.exp(-0.5 * ((d - IDEAL_RANGE) / RANGE_SIGMA) ** 2);
+
         const bonus = RANGE_BONUS * gaussianRange(dist);
         rangeA += bonus;
-        rangeB += bonus;  // symmetric — same distance for both
+        rangeB += bonus;
+
+        // Aim reward (always sampled)
+        if (crosshairOnEnemy(entA, entB)) shapedA += R_AIM_SAMPLE;
+        if (crosshairOnEnemy(entB, entA)) shapedB += R_AIM_SAMPLE;
       } catch {}
     }, SAMPLE_INTERVAL);
 
@@ -296,42 +384,44 @@ async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
     clearInterval(proximitySampler);
     botA.stopFighting();
     botB.stopFighting();
+
     const elapsed = ((Date.now() - fightStart) / 1000).toFixed(1);
 
-    const hitsA  = botA.getHits().myHits;
-    const hitsB  = botB.getHits().myHits;
-    const scoreA = hitsA + rangeA;
-    const scoreB = hitsB + rangeB;
+    const hitsA = botA.getHits().myHits;
+    const hitsB = botB.getHits().myHits;
 
-    // Determine winner
+    const scoreA = hitsA + rangeA + shapedA;
+    const scoreB = hitsB + rangeB + shapedB;
+
     let resultLine;
-    if (hitsA > hitsB) {
-      resultLine = chalk.green(`WINNER: Agent ${idxA} (${nameA})`);
-    } else if (hitsB > hitsA) {
-      resultLine = chalk.green(`WINNER: Agent ${idxB} (${nameB})`);
-    } else {
-      resultLine = chalk.gray(`DRAW`);
-    }
-    const breakdown = (name, hits, range, total) =>
-      chalk.gray(`${name}: ${hits}hits +${range.toFixed(1)}range = ${chalk.white(total.toFixed(1))}`);
+    if (hitsA > hitsB) resultLine = chalk.green(`WINNER: Agent ${idxA} (${nameA})`);
+    else if (hitsB > hitsA) resultLine = chalk.green(`WINNER: Agent ${idxB} (${nameB})`);
+    else resultLine = chalk.gray('DRAW');
+
+    const breakdown = (name, hits, range, shaped, total) =>
+      chalk.gray(
+        `${name}: ${hits}hits +${range.toFixed(1)}range +${shaped.toFixed(1)}shape = ${chalk.white(total.toFixed(1))}`
+      );
+
     console.log(
       `\n${tag} ${chalk.bold('⏹  FIGHT OVER')} (${elapsed}s) — ${resultLine}\n` +
-      `${tag}  ${breakdown(nameA, hitsA, rangeA, scoreA)}\n` +
-      `${tag}  ${breakdown(nameB, hitsB, rangeB, scoreB)}`
+      `${tag}  ${breakdown(nameA, hitsA, rangeA, shapedA, scoreA)}\n` +
+      `${tag}  ${breakdown(nameB, hitsB, rangeB, shapedB, scoreB)}`
     );
 
-    log.step(FTAG, `done — ${nameA}:${hitsA}hits+${rangeA.toFixed(1)}range ${nameB}:${hitsB}hits+${rangeB.toFixed(1)}range`);
+    log.step(
+      FTAG,
+      `done — ${nameA}:${hitsA}hits+${rangeA.toFixed(1)}range+${shapedA.toFixed(1)}shape ` +
+      `${nameB}:${hitsB}hits+${rangeB.toFixed(1)}range+${shapedB.toFixed(1)}shape`
+    );
 
     return { score: scoreA, oppScore: scoreB };
-
   } finally {
     if (botA) { try { botA.stopFighting(); botA.disconnect(); } catch {} }
     if (botB) { try { botB.stopFighting(); botB.disconnect(); } catch {} }
+
     await sleep(200);
-    await server.rconBatch([
-      `kick ${nameA} cleanup`,
-      `kick ${nameB} cleanup`,
-    ]).catch(() => {});
+    await server.rconBatch([`kick ${nameA} cleanup`, `kick ${nameB} cleanup`]).catch(() => {});
     await sleep(300);
     log.step(FTAG, 'cleanup done');
   }
@@ -442,3 +532,4 @@ main().catch(e => {
   console.error(chalk.red('\nFatal:'), e);
   process.exit(1);
 });
+      child[i] += (Math.random() - 0.5) * TRAINING.MUTATION

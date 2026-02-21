@@ -195,6 +195,7 @@ async function main() {
             `clear ${humanName}`,
             `give ${humanName} minecraft:diamond_sword 1 0 {Unbreakable:1}`,
             `effect ${humanName} instant_health 1 255 true`,
+      `effect ${humanName} saturation 9999 255 true`,
           ]);
           await reTeleport(server, humanName, sp);
 
@@ -252,6 +253,7 @@ async function spawnAI(server, weights, arenaId = 0) {
     `give ${BOT_NAME} minecraft:diamond_sword 1 0 {Unbreakable:1}`,
     `effect ${BOT_NAME} instant_health 1 255 true`,
     `gamemode 2 ${BOT_NAME}`,
+      `effect ${humanName} saturation 9999 255 true`,
   ]);
   await reTeleport(server, BOT_NAME, sp);
 

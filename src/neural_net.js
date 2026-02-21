@@ -56,15 +56,19 @@ function decide(weights, inputs) {
     out[i] = sigmoid(sum);
   }
 
-  return [
-    out[0] > 0.5,   // fwd
-    out[1] > 0.5,   // back
-    out[2] > 0.5,   // left
-    out[3] > 0.5,   // right
-    out[4] > 0.5,   // jump
-    out[5] > 0.5,   // attack
-    out[6] > 0.5,   // block
-  ];
+  const toSigned = v => (v * 2) - 1; // [0,1] -> [-1,1]
+
+  return {
+    fwd: out[0] > 0.5,
+    back: out[1] > 0.5,
+    left: out[2] > 0.5,
+    right: out[3] > 0.5,
+    jump: out[4] > 0.5,
+    attack: out[5] > 0.5,
+    sprint: out[6] > 0.5,
+    yawDelta: toSigned(out[7]),
+    pitchDelta: toSigned(out[8]),
+  };
 }
 
 function toJSON(weights) {

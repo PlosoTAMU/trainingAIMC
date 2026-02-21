@@ -24,6 +24,14 @@ function norm(v, lo, hi) {
 // Clamp a value to [-1, 1]
 function clamp1(v) { return Math.max(-1, Math.min(1, v)); }
 
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function wrapPi(a) {
+  while (a <= -Math.PI) a += Math.PI * 2;
+  while (a > Math.PI) a -= Math.PI * 2;
+  return a;
+}
+function degToRad(d) { return (d * Math.PI) / 180; }
+
 function buildInputs(selfBot, oppEntity, zoneOriginX, myHits, oppHits) {
   const sp = selfBot.entity.position;
   const sv = selfBot.entity.velocity;
@@ -78,16 +86,18 @@ function cfg_zone_spacing_half() {
   return 25;
 }
 
-function randomActions() {
-  return [
-    Math.random() > 0.4,   // fwd
-    false,                  // back
-    Math.random() > 0.7,   // left
-    Math.random() > 0.7,   // right
-    Math.random() > 0.85,  // jump
-    Math.random() > 0.25,  // attack
-    Math.random() > 0.5,   // sprint (explicit)
-  ];
+function randomActionsObj() {
+  return {
+    fwd: Math.random() > 0.4,
+    back: false,
+    left: Math.random() > 0.7,
+    right: Math.random() > 0.7,
+    jump: Math.random() > 0.85,
+    attack: Math.random() > 0.25,
+    sprint: Math.random() > 0.5,
+    yawDelta: (Math.random() * 2 - 1),
+    pitchDelta: (Math.random() * 2 - 1),
+  };
 }
 
 function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
@@ -131,7 +141,8 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
     }
 
     const ping = randomPing();
-    const stats = { hitsLanded: 0, hitsTaken: 0 };
+
+    const stats = { hitsLanded: 0, hitsTaken: 0, leftClicks: 0 };
     const emitter = new EventEmitter();
 
     let fightInterval = null;
@@ -142,8 +153,10 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
     let lastAttackTime = 0;
     let isDisconnected = false;
 
+    // NEW: for "no autoclick" (click must be spam-toggled)
+    let lastAttackPressed = false;
+
     // ── Socket-level error handler ─────────────────────────────────────────
-    // Fires BEFORE spawn (connection errors) AND after spawn (mid-session errors).
     const errorHandler = (err) => {
       log.error(TAG, `bot "error" event (resolved=${resolved})`, err);
       if (!resolved) {
@@ -151,13 +164,10 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
         reject(err);
         return;
       }
-      // After successful spawn, absorb — these are typically ECONNRESET on disconnect
     };
     bot.on('error', errorHandler);
 
-    // Also intercept errors on the raw minecraft-protocol client socket
-    // mineflayer creates bot._client (minecraft-protocol Client) which has a socket
-    // We attach after the next tick so bot._client is definitely populated
+    // Attach minecraft-protocol socket listeners (same as before) [8]
     setImmediate(() => {
       try {
         if (bot._client) {
@@ -239,36 +249,56 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
       }
 
       const inputs = buildInputs(bot, oppEntity, zoneOriginX, myHits, oppHits);
-      const actions = weights ? nn.decide(weights, inputs) : randomActions();
-      const [fwd, back, left, right, jump, attack, sprint] = actions;
+      const a = weights ? nn.decide(weights, inputs) : randomActionsObj();
 
       withPing(ping, () => {
         if (!fighting || isDisconnected) return;
         try {
-          bot.setControlState('forward', fwd && !back);
-          bot.setControlState('back',    back && !fwd);
-          bot.setControlState('left',    left && !right);
-          bot.setControlState('right',   right && !left);
-          bot.setControlState('sprint',  sprint && (fwd || left || right) && !back);
-          bot.setControlState('jump',    jump);
+          bot.setControlState('forward', a.fwd && !a.back);
+          bot.setControlState('back',    a.back && !a.fwd);
+          bot.setControlState('left',    a.left && !a.right);
+          bot.setControlState('right',   a.right && !a.left);
+          bot.setControlState('sprint',  a.sprint && (a.fwd || a.left || a.right) && !a.back);
+          bot.setControlState('jump',    a.jump);
           bot.setControlState('sneak',   false);
+
+          // View control (NO AUTO AIM)
+          const MAX_YAW_DEG_PER_TICK = 18;
+          const MAX_PITCH_DEG_PER_TICK = 12;
+
+          const newYaw = wrapPi(bot.entity.yaw + degToRad(MAX_YAW_DEG_PER_TICK) * a.yawDelta);
+          const newPitch = clamp(
+            bot.entity.pitch + degToRad(MAX_PITCH_DEG_PER_TICK) * a.pitchDelta,
+            degToRad(-90),
+            degToRad(90)
+          );
+          bot.look(newYaw, newPitch, true);
         } catch {}
       });
 
-      if (attack && oppEntity) {
-        try {
-          const dist = bot.entity.position.distanceTo(oppEntity.position);
-          if (dist < 4.5) {
-            withPing(ping, () => {
-              if (!fighting || isDisconnected) return;
-              try {
-                lastAttackTime = Date.now() + ping;
-                bot.lookAt(oppEntity.position.offset(0, 1.62, 0), true);
-                bot.attack(oppEntity);
-              } catch {}
-            });
-          }
-        } catch {}
+      // "No autoclick": click only on rising edge
+      const clickNow = !!a.attack && !lastAttackPressed;
+      lastAttackPressed = !!a.attack;
+
+      if (clickNow) {
+        stats.leftClicks++;
+        emitter.emit('leftClick', stats.leftClicks);
+
+        if (oppEntity) {
+          try {
+            const dist = bot.entity.position.distanceTo(oppEntity.position);
+            if (dist < 4.5) {
+              withPing(ping, () => {
+                if (!fighting || isDisconnected) return;
+                try {
+                  lastAttackTime = Date.now() + ping;
+                  // IMPORTANT: no bot.lookAt() here (removed auto-aim) [8]
+                  bot.attack(oppEntity);
+                } catch {}
+              });
+            }
+          } catch {}
+        }
       }
     }
 
@@ -300,7 +330,6 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
       stopFighting();
       try {
         bot.removeAllListeners();
-        // Also silence the underlying client
         if (bot._client) {
           try { bot._client.removeAllListeners('error'); } catch {}
           bot._client.on('error', (err) => {
@@ -311,7 +340,6 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
       } catch (e) {
         log.warn(TAG, `bot.quit() threw: ${e.message}`);
       }
-      // Force-close the socket after a short grace period
       setTimeout(() => {
         try {
           if (bot._client && bot._client.socket) {
@@ -322,7 +350,6 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
       }, 1000);
     }
 
-    // Create controller ONCE, properly
     const controller = {
       bot,
       stats,
