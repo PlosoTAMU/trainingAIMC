@@ -253,82 +253,41 @@ async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
     console.log(`${tag} ${chalk.bold.yellow('⚔  FIGHT START')} (timeout: ${BOXING.HIT_TIMEOUT_MS}ms)`);
 
     // ── Reward shaping ──────────────────────────────────────────────────────
-    // All bonuses are sampled every SAMPLE_INTERVAL ms.
+    // Sampled every SAMPLE_INTERVAL ms during the fight.
     //
-    //  RANGE bonus   — Gaussian peak at IDEAL_RANGE blocks (3.0).
-    //                  σ=1.5 so the bot gets ~60% bonus at 2–4 blocks, ~14% at 6.
-    //                  Encourages staying at optimal sword range.
+    //  RANGE bonus — Gaussian peak at IDEAL_RANGE (3.0 blocks).
+    //                Rewards staying at optimal 1.8 sword range.
+    //                σ=1.5 → ~60% bonus at 2–4 blocks, near-zero beyond 8.
+    //                The NN genuinely controls distance via movement outputs,
+    //                so this is a learnable signal.
     //
-    //  AIM bonus     — cosine similarity between the bot's look direction and
-    //                  the vector to the enemy's head.  1.0 = perfect aim, 0 = 90°.
-    //                  Rewards the bot for facing the opponent.
-    //
-    //  CLICK bonus   — tracked in bot.js; incremented each tick where attack fires.
-    //                  Small per-click reward so the bot learns to swing.
-    //                  Only credited when an enemy is in range (dist < 4.5) to avoid
-    //                  rewarding blind spam.
+    //  NOTE: We do NOT reward aim — bot.lookAt() auto-aims on every attack tick,
+    //        so the NN has no control over yaw/pitch. Rewarding it would just be
+    //        free points for getting close.
 
     const SAMPLE_INTERVAL = 500;
-    const IDEAL_RANGE     = 3.0;   // blocks — optimal sword range in 1.8 PvP
-    const RANGE_SIGMA     = 1.5;   // std-dev of Gaussian; ±1.5 blocks gets ~60% bonus
+    const IDEAL_RANGE     = 3.0;
+    const RANGE_SIGMA     = 1.5;
     const RANGE_BONUS     = 0.6;   // max points per sample at ideal range
-    const AIM_BONUS       = 0.4;   // max points per sample for perfect aim
 
     let rangeA = 0, rangeB = 0;
-    let aimA   = 0, aimB   = 0;
 
     const proximitySampler = setInterval(() => {
       try {
-        const posA  = botA.bot.entity?.position;
-        const posB  = botB.bot.entity?.position;
-        const yawA  = botA.bot.entity?.yaw;   // radians, mineflayer convention
-        const yawB  = botB.bot.entity?.yaw;
-        const pitchA = botA.bot.entity?.pitch;
-        const pitchB = botB.bot.entity?.pitch;
-
+        const posA = botA.bot.entity?.position;
+        const posB = botB.bot.entity?.position;
         if (!posA || !posB) return;
 
-        // ── distance ──────────────────────────────────────────────────────
         const dx = posA.x - posB.x;
         const dy = posA.y - posB.y;
         const dz = posA.z - posB.z;
-        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
 
-        // ── range reward (Gaussian centred on IDEAL_RANGE) ────────────────
         const gaussianRange = (d) =>
           Math.exp(-0.5 * ((d - IDEAL_RANGE) / RANGE_SIGMA) ** 2);
-        rangeA += RANGE_BONUS * gaussianRange(dist);
-        rangeB += RANGE_BONUS * gaussianRange(dist);  // symmetric — same dist for both
-
-        // ── aim reward (dot product of look direction vs enemy vector) ────
-        // mineflayer yaw: 0 = south (+Z), increases CCW. pitch: 0 = horizontal.
-        // Look direction vector for a bot:
-        //   lx = -sin(yaw)*cos(pitch),  ly = -sin(pitch),  lz = cos(yaw)*cos(pitch)
-        if (yawA != null && pitchA != null) {
-          const cpA = Math.cos(pitchA);
-          const lxA = -Math.sin(yawA) * cpA;
-          const lyA = -Math.sin(pitchA);
-          const lzA =  Math.cos(yawA) * cpA;
-          // Vector from A to B's head (eye height ~1.62)
-          const toXA = posB.x - posA.x;
-          const toYA = (posB.y + 1.62) - (posA.y + 1.62);
-          const toZA = posB.z - posA.z;
-          const toLenA = Math.sqrt(toXA*toXA + toYA*toYA + toZA*toZA) || 1;
-          const dotA = lxA*(toXA/toLenA) + lyA*(toYA/toLenA) + lzA*(toZA/toLenA);
-          aimA += AIM_BONUS * Math.max(0, dotA);  // clamp negative (looking away)
-        }
-        if (yawB != null && pitchB != null) {
-          const cpB = Math.cos(pitchB);
-          const lxB = -Math.sin(yawB) * cpB;
-          const lyB = -Math.sin(pitchB);
-          const lzB =  Math.cos(yawB) * cpB;
-          const toXB = posA.x - posB.x;
-          const toYB = (posA.y + 1.62) - (posB.y + 1.62);
-          const toZB = posA.z - posB.z;
-          const toLenB = Math.sqrt(toXB*toXB + toYB*toYB + toZB*toZB) || 1;
-          const dotB = lxB*(toXB/toLenB) + lyB*(toYB/toLenB) + lzB*(toZB/toLenB);
-          aimB += AIM_BONUS * Math.max(0, dotB);
-        }
+        const bonus = RANGE_BONUS * gaussianRange(dist);
+        rangeA += bonus;
+        rangeB += bonus;  // symmetric — same distance for both
       } catch {}
     }, SAMPLE_INTERVAL);
 
@@ -341,8 +300,8 @@ async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
 
     const hitsA  = botA.getHits().myHits;
     const hitsB  = botB.getHits().myHits;
-    const scoreA = hitsA + rangeA + aimA;
-    const scoreB = hitsB + rangeB + aimB;
+    const scoreA = hitsA + rangeA;
+    const scoreB = hitsB + rangeB;
 
     // Determine winner
     let resultLine;
@@ -353,15 +312,15 @@ async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
     } else {
       resultLine = chalk.gray(`DRAW`);
     }
-    const breakdown = (name, hits, range, aim, total) =>
-      chalk.gray(`${name}: ${hits}hits +${range.toFixed(1)}range +${aim.toFixed(1)}aim = ${chalk.white(total.toFixed(1))}`);
+    const breakdown = (name, hits, range, total) =>
+      chalk.gray(`${name}: ${hits}hits +${range.toFixed(1)}range = ${chalk.white(total.toFixed(1))}`);
     console.log(
       `\n${tag} ${chalk.bold('⏹  FIGHT OVER')} (${elapsed}s) — ${resultLine}\n` +
-      `${tag}  ${breakdown(nameA, hitsA, rangeA, aimA, scoreA)}\n` +
-      `${tag}  ${breakdown(nameB, hitsB, rangeB, aimB, scoreB)}`
+      `${tag}  ${breakdown(nameA, hitsA, rangeA, scoreA)}\n` +
+      `${tag}  ${breakdown(nameB, hitsB, rangeB, scoreB)}`
     );
 
-    log.step(FTAG, `done — ${nameA}:${hitsA}hits+${rangeA.toFixed(1)}range+${aimA.toFixed(1)}aim ${nameB}:${hitsB}hits+${rangeB.toFixed(1)}range+${aimB.toFixed(1)}aim`);
+    log.step(FTAG, `done — ${nameA}:${hitsA}hits+${rangeA.toFixed(1)}range ${nameB}:${hitsB}hits+${rangeB.toFixed(1)}range`);
 
     return { score: scoreA, oppScore: scoreB };
 

@@ -115,7 +115,7 @@ module.exports = {
     INPUTS: 14,
     HIDDEN1: 32,
     HIDDEN2: 24,
-    OUTPUTS: 7,   // fwd, back, left, right, jump, attack, block
+    OUTPUTS: 7,   // fwd, back, left, right, jump, attack, sprint
     DECISION_HZ: 20,  // 20 decisions/sec — richer signal per fight
   },
 
