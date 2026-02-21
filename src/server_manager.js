@@ -500,6 +500,9 @@ aliases: now-in-commands.yml
       'gamerule mobGriefing false',
       'gamerule doEntityDrops false',
       'gamerule showDeathMessages false',
+      // Disable random tick processing entirely — no crops/leaves/grass to tick,
+      // and it frees server CPU cycles for actual bot physics.
+      'gamerule randomTickSpeed 0',
       'time set 6000',
       `setworldspawn -419 ${cfg.ZONE.FLOOR_Y} 130`,
     ]);

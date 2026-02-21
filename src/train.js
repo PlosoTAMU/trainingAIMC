@@ -6,6 +6,9 @@ const path = require('path');
 const chalk = require('chalk');
 const args = require('minimist')(process.argv.slice(2));
 
+// Prevent laptop sleep / lid-close sleep, set High Performance power plan
+require('./keepawake');
+
 const cfg = require('../config');
 const { ServerManager } = require('./server_manager');
 const { createBot } = require('./bot');
@@ -198,16 +201,44 @@ async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
     botA.startFighting();
     botB.startFighting();
 
+    // Sample proximity every 500ms — reward agents that close the gap.
+    // Score bonus = number of samples where dist < APPROACH_THRESHOLD blocks.
+    const APPROACH_THRESHOLD = 6;   // within sword range = 4.5, generous for learning
+    const APPROACH_BONUS = 0.5;     // points per sample tick spent close
+    const SAMPLE_INTERVAL = 500;
+    let proximityA = 0;
+    let proximityB = 0;
+    const proximitySampler = setInterval(() => {
+      try {
+        const posA = botA.bot.entity?.position;
+        const posB = botB.bot.entity?.position;
+        if (posA && posB) {
+          const dist = Math.sqrt(
+            (posA.x - posB.x) ** 2 +
+            (posA.y - posB.y) ** 2 +
+            (posA.z - posB.z) ** 2,
+          );
+          if (dist < APPROACH_THRESHOLD) {
+            proximityA += APPROACH_BONUS;
+            proximityB += APPROACH_BONUS;
+          }
+        }
+      } catch {}
+    }, SAMPLE_INTERVAL);
+
     await sleep(BOXING.HIT_TIMEOUT_MS);
 
+    clearInterval(proximitySampler);
     botA.stopFighting();
     botB.stopFighting();
 
     const hitsA = botA.getHits().myHits;
     const hitsB = botB.getHits().myHits;
-    log.step(FTAG, `done — ${nameA}:${hitsA} ${nameB}:${hitsB}`);
+    const scoreA = hitsA + proximityA;
+    const scoreB = hitsB + proximityB;
+    log.step(FTAG, `done — ${nameA}:${hitsA}hits+${proximityA.toFixed(1)}prox ${nameB}:${hitsB}hits+${proximityB.toFixed(1)}prox`);
 
-    return { score: hitsA, oppScore: hitsB };
+    return { score: scoreA, oppScore: scoreB };
 
   } finally {
     if (botA) { try { botA.stopFighting(); botA.disconnect(); } catch {} }

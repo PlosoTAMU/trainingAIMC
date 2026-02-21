@@ -11,7 +11,7 @@ module.exports = {
   RCON_PASSWORD: 'pvptrainer',
 
   JAVA_FLAGS: [
-    '-Xmx6G', '-Xms6G',              // More heap for 128 simultaneous bots
+    '-Xmx6G', '-Xms6G',
     '-XX:+UseG1GC',
     '-XX:+ParallelRefProcEnabled',
     '-XX:MaxGCPauseMillis=200',
@@ -30,11 +30,13 @@ module.exports = {
     '-XX:SurvivorRatio=32',
     '-XX:+PerfDisableSharedMem',
     '-XX:MaxTenuringThreshold=1',
-    '-Dio.netty.eventLoopThreads=4',  // More threads for many simultaneous connections
+    // Use ALL available CPU cores for GC (0 = auto-detect)
+    '-XX:ParallelGCThreads=0',
+    '-XX:ConcGCThreads=0',
     '-Dio.netty.transport.noNative=true', // Force NIO, avoid epoll crash
     '-Dusing.aikars.flags=true',
     '-jar',
-  ], //
+  ],
 
   ARENAS: (() => {
   const Y = 102;
