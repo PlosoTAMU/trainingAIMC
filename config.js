@@ -44,7 +44,7 @@ module.exports = {
     '-XX:+PerfDisableSharedMem',
     '-XX:MaxTenuringThreshold=1',
     // Use ALL available CPU cores for GC (0 = auto-detect)
-    '-XX:ParallelGCThreads=0',
+    '-XX:ParallelGCThreads=8',
     '-XX:ConcGCThreads=0',
     '-Dio.netty.transport.noNative=true', // Force NIO, avoid epoll crash
     '-Dusing.aikars.flags=true',
