@@ -96,63 +96,46 @@ async function bootInstances() {
   }
 
   await Promise.all(boots);
-  console.log(chalk.gray('All instances ready — stabilizing 5s...\n'));
-  await sleep(5000);
+  console.log(chalk.gray('All instances ready — stabilizing 3s...\n'));
+  await sleep(3000);
 }
 
 // ── Population evaluation ──────────────────────────────────────────────────
 
 async function evaluatePopulation(population) {
   const scores = new Array(population.length).fill(0);
-  const N = TRAINING.PARALLEL_INSTANCES;
+  const server = instances[0];  // single server hosts all arenas
 
-  // Build the fight schedule: agent i vs agent (i+1)%n
+  // Pair agent i vs agent (i+1)%n — gives every agent exactly one fight.
+  // With POP_SIZE=128 this produces 64 fights → fills all 64 arenas at once.
   const schedule = population.map((_, i) => ({
     idxA: i,
     idxB: (i + 1) % population.length,
+    arenaId: i % cfg.ARENAS.length,
   }));
 
-  console.log(chalk.gray(`  ${schedule.length} fights, ${N} at a time\n`));
+  console.log(chalk.gray(`  ${schedule.length} fights firing simultaneously across ${cfg.ARENAS.length} arenas\n`));
 
-  // Process in batches of N (one fight per instance slot)
-  for (let batchStart = 0; batchStart < schedule.length; batchStart += N) {
-    const batch = schedule.slice(batchStart, batchStart + N);
+  // Fire ALL fights at once — each uses a different arena so bots never meet
+  const results = await Promise.allSettled(
+    schedule.map(({ idxA, idxB, arenaId }) =>
+      runFight(server, population[idxA], population[idxB], idxA, idxB, arenaId)
+    )
+  );
 
-    const results = await Promise.allSettled(
-      batch.map(({ idxA, idxB }, slot) => {
-        // Each fight in a batch uses a different arena to keep bots separated.
-        // Cycle through all 64 arenas across batches.
-        const arenaId = ((batchStart / N + slot) * 1) % cfg.ARENAS.length;
-        process.stdout.write(chalk.gray(
-          `  [inst${slot}|arena${arenaId}] Agent ${idxA} vs ${idxB}... `
-        ));
-        return runFight(
-          instances[slot],
-          population[idxA],
-          population[idxB],
-          idxA,
-          idxB,
-          arenaId,
-        );
-      })
-    );
-
-    for (const [j, res] of results.entries()) {
-      const { idxA, idxB } = batch[j];
-      if (res.status === 'fulfilled') {
-        const { score, oppScore } = res.value;
-        scores[idxA] += score;
-        scores[idxB] += oppScore;
-        console.log(chalk.green(`${score}-${oppScore}`));
-      } else {
-        log.error('EvalPop', `batch fight ${batchStart + j} threw`, res.reason);
-        console.log(chalk.red(`FAILED: ${res.reason?.message}`));
-      }
+  for (const [i, res] of results.entries()) {
+    const { idxA, idxB } = schedule[i];
+    if (res.status === 'fulfilled') {
+      const { score, oppScore } = res.value;
+      scores[idxA] += score;
+      scores[idxB] += oppScore;
+      process.stdout.write(chalk.green(`[${idxA}v${idxB}:${score}-${oppScore}] `));
+    } else {
+      log.error('EvalPop', `fight ${i} threw`, res.reason);
+      process.stdout.write(chalk.red(`[${idxA}v${idxB}:ERR] `));
     }
-
-    // Brief cooldown between batches
-    await sleep(1500);
   }
+  console.log();
 
   return scores;
 }
@@ -175,28 +158,32 @@ async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
     log.step(FTAG, `starting — agents ${idxA} vs ${idxB}, names ${nameA}/${nameB}`);
 
     await server.rconBatch([`kick ${nameA} reset`, `kick ${nameB} reset`]);
-    await sleep(300);
+    await sleep(100);
 
-    botA = await connectBotWithRetry({
-      host: '127.0.0.1',
-      port: server.port,
-      username: nameA,
-      weights: weightsA,
-      zoneOriginX: 0,
-    });
-    await sleep(1500);
-    botB = await connectBotWithRetry({
-      host: '127.0.0.1',
-      port: server.port,
-      username: nameB,
-      weights: weightsB,
-      zoneOriginX: 0,
-    });
+    // Connect both bots concurrently — they go to different arenas so no collision
+    [botA, botB] = await Promise.all([
+      connectBotWithRetry({
+        host: '127.0.0.1',
+        port: server.port,
+        username: nameA,
+        weights: weightsA,
+        zoneOriginX: 0,
+      }),
+      connectBotWithRetry({
+        host: '127.0.0.1',
+        port: server.port,
+        username: nameB,
+        weights: weightsB,
+        zoneOriginX: 0,
+      }),
+    ]);
 
-    await sleep(1000);
+    await sleep(500);
     await server.rconBatch([
       `gamemode 2 ${nameA}`,
       `gamemode 2 ${nameB}`,
+      `effect ${nameA} resistance 9999 4 true`,
+      `effect ${nameB} resistance 9999 4 true`,
       `tp ${nameA} ${spawnA.x} ${spawnA.y} ${spawnA.z} ${spawnA.yaw} 0`,
       `tp ${nameB} ${spawnB.x} ${spawnB.y} ${spawnB.z} ${spawnB.yaw} 0`,
       `clear ${nameA}`,
@@ -205,13 +192,9 @@ async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
       `give ${nameB} diamond_sword 1 0 {Unbreakable:1}`,
       `effect ${nameA} instant_health 1 255 true`,
       `effect ${nameB} instant_health 1 255 true`,
-      // Infinite resistance (level 5 = immune to all damage) so bots
-      // never accidentally die and leave the fight early.
-      `effect ${nameA} resistance 9999 4 true`,
-      `effect ${nameB} resistance 9999 4 true`,
     ]);
 
-    await sleep(400);
+    await sleep(200);
     botA.startFighting();
     botB.startFighting();
 
@@ -229,12 +212,12 @@ async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
   } finally {
     if (botA) { try { botA.stopFighting(); botA.disconnect(); } catch {} }
     if (botB) { try { botB.stopFighting(); botB.disconnect(); } catch {} }
-    await sleep(400);
+    await sleep(200);
     await server.rconBatch([
       `kick ${nameA} cleanup`,
       `kick ${nameB} cleanup`,
     ]).catch(() => {});
-    await sleep(1000);
+    await sleep(300);
     log.step(FTAG, 'cleanup done');
   }
 }

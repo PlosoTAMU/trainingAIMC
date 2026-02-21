@@ -11,7 +11,7 @@ module.exports = {
   RCON_PASSWORD: 'pvptrainer',
 
   JAVA_FLAGS: [
-    '-Xmx1G', '-Xms1G',              // Conservative memory
+    '-Xmx4G', '-Xms4G',              // More heap for 128 simultaneous bots
     '-XX:+UseG1GC',
     '-XX:+ParallelRefProcEnabled',
     '-XX:MaxGCPauseMillis=200',
@@ -30,7 +30,7 @@ module.exports = {
     '-XX:SurvivorRatio=32',
     '-XX:+PerfDisableSharedMem',
     '-XX:MaxTenuringThreshold=1',
-    '-Dio.netty.eventLoopThreads=2',  // Limit Netty threads
+    '-Dio.netty.eventLoopThreads=4',  // More threads for many simultaneous connections
     '-Dio.netty.transport.noNative=true', // Force NIO, avoid epoll crash
     '-Dusing.aikars.flags=true',
     '-jar',
@@ -65,7 +65,7 @@ module.exports = {
   // ── Boxing match rules ─────────────────────────────────────────────────────
   BOXING: {
     HITS_TO_WIN: 100,
-    HIT_TIMEOUT_MS: 15000,
+    HIT_TIMEOUT_MS: 5000,   // 5s per fight — short rounds, fast iteration
     HEAL_ON_HIT: true,
     HEAL_DELAY_MS: 50,
   },
@@ -77,17 +77,17 @@ module.exports = {
   },
 
   // ── Training (Genetic Algorithm) ──────────────────────────────────────────
-  // PARALLEL_INSTANCES: number of simultaneous server processes.
-  // Each gets its own port range: base + (i * PORT_STRIDE).
+  // Single server hosts all 64 arenas simultaneously.
+  // POP_SIZE=128 → 64 fights fire at once (one per arena), no batching needed.
   TRAINING: {
-    PARALLEL_INSTANCES: 4,           // run 4 server instances simultaneously
-    PORT_STRIDE: 10,                 // ports: 25570, 25580, 25590, 25600 ...
-    POP_SIZE: 16,                    // bigger pop benefits from parallelism
+    PARALLEL_INSTANCES: 1,           // one server — all arenas run on it
+    PORT_STRIDE: 10,
+    POP_SIZE: 128,                   // 64 pairs fill every arena simultaneously
     FIGHTS_PER_AGENT: 1,
     TOP_FRACTION: 0.5,
     MUTATION_RATE: 0.1,
     MUTATION_STRENGTH: 0.3,
-    SAVE_EVERY_N_GENS: 5,
+    SAVE_EVERY_N_GENS: 10,
     WEIGHTS_DIR: './weights',
   },
 

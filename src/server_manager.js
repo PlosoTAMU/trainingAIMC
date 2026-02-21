@@ -173,7 +173,7 @@ class ServerManager {
       `rcon.port=${this.rconPort}`,
       `rcon.password=${cfg.RCON_PASSWORD}`,
       `online-mode=false`,
-      `max-players=20`,
+      `max-players=200`,
       `view-distance=${this._isPlayServer ? 10 : 2}`,
       `pvp=true`,
       `difficulty=1`,
