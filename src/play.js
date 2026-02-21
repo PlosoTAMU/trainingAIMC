@@ -237,7 +237,8 @@ async function main() {
 
 async function spawnAI(server, weights, arenaId = 0) {
   const sp = ServerManager.zoneSpawnB(arenaId);
-
+  // in spawnAI(server, weights, arenaId)
+  await server.rconBatch([`kick ${BOT_NAME} reset`]).catch(() => {});
   const ctrl = await createBot({
     host: '127.0.0.1',
     port: PLAY_PORT,
