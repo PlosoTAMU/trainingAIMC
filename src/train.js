@@ -532,4 +532,3 @@ main().catch(e => {
   console.error(chalk.red('\nFatal:'), e);
   process.exit(1);
 });
-      child[i] += (Math.random() - 0.5) * TRAINING.MUTATION
