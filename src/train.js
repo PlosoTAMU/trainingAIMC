@@ -28,6 +28,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const instances = [];
 let fightCounter = 0;
 
+// Hall of Fame: keep best agents from previous generations to prevent collapse
+const hallOfFame = [];
+const MAX_HALL_SIZE = 5;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Aim ray/hitbox shaping helpers (crosshair-on-enemy hitbox)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -80,8 +84,6 @@ function crosshairOnEnemy(botEnt, enemyEnt) {
   const min = enemyEnt.position.offset(-hw, 0, -hw);
   const max = enemyEnt.position.offset(hw, 1.8, hw);
 
-  // Keep reward present always, but only true if ray intersects within trace distance.
-  // Using 4.5 to align with the bot's attack gating distance in bot.js [8].
   const MAX_TRACE = 4.5;
   return rayIntersectsAABB(
     { x: eye.x, y: eye.y, z: eye.z },
@@ -99,7 +101,7 @@ function crosshairOnEnemy(botEnt, enemyEnt) {
 async function main() {
   log.info('Main', `═══ Training session started (pid=${process.pid}) ═══`);
   log.info('Main', `Log file: ${log.LOG_FILE}`);
-  console.log(chalk.bold.cyan('\n⚔  MC 1.8 PvP AI Trainer  ⚔\n'));
+  console.log(chalk.bold.cyan('\n⚔  MC 1.8 PvP AI Trainer (ANTI-SPIN EDITION)  ⚔\n'));
   console.log(chalk.gray(`Parallel instances: ${TRAINING.PARALLEL_INSTANCES}`));
   console.log(chalk.gray(`Population size:    ${TRAINING.POP_SIZE}`));
   console.log(chalk.gray(`Active arenas:      ${TRAINING.ACTIVE_ARENAS}`));
@@ -116,7 +118,16 @@ async function main() {
       const data = await fs.readJSON(latest);
       generation = data.generation || 0;
       population = data.population.map(w => nn.fromJSON(w));
+      
+      // Restore hall of fame if available
+      if (data.hallOfFame) {
+        hallOfFame.push(...data.hallOfFame.slice(0, MAX_HALL_SIZE));
+      }
+      
       console.log(chalk.green(`Resumed from generation ${generation}`));
+      if (hallOfFame.length > 0) {
+        console.log(chalk.gray(`  Hall of Fame: ${hallOfFame.length} champions loaded`));
+      }
     }
   }
 
@@ -137,24 +148,42 @@ async function main() {
 
     const bestScore = ranked[0].score;
     const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+    const worstScore = ranked[ranked.length - 1].score;
 
-    console.log(chalk.green(`\nBest: ${bestScore.toFixed(1)}  Avg: ${avgScore.toFixed(1)}`));
+    // Update hall of fame
+    updateHallOfFame(ranked[0].weights, bestScore);
+
+    console.log(chalk.green(`\nBest: ${bestScore.toFixed(1)}  Avg: ${avgScore.toFixed(1)}  Worst: ${worstScore.toFixed(1)}`));
+    console.log(chalk.gray(`  Score spread: ${(bestScore - worstScore).toFixed(1)}`));
     console.log(chalk.bold.white('\n  Top 5 agents this generation:'));
     ranked.slice(0, 5).forEach(({ score }, i) => {
       const medal = ['🥇','🥈','🥉','  4','  5'][i];
       console.log(`  ${medal}  Agent ${i.toString().padStart(2)} — score: ${chalk.yellow(score.toFixed(1))}`);
     });
-    const worstScore = ranked[ranked.length - 1].score;
-    console.log(chalk.gray(`  Worst: ${worstScore.toFixed(1)}  Spread: ${(bestScore - worstScore).toFixed(1)}\n`));
 
     if (generation % TRAINING.SAVE_EVERY_N_GENS === 0) {
       await saveGeneration(generation, ranked, bestScore);
     } else {
-      await saveChampion(generation, ranked[0].weights, bestScore);
-      console.log(chalk.gray(`  💾 Champion saved (gen ${generation}, score ${bestScore.toFixed(1)}) → ${cfg.TRAINING.WEIGHTS_DIR}`));
+      await savePopulation(generation, ranked, bestScore);
+      console.log(chalk.gray(`  💾 Population saved (gen ${generation}, best ${bestScore.toFixed(1)})`));
     }
 
     population = evolve(ranked, generation);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hall of Fame Management
+// ─────────────────────────────────────────────────────────────────────────────
+
+function updateHallOfFame(weights, score) {
+  // Add to hall if it's better than worst member OR hall isn't full
+  if (hallOfFame.length < MAX_HALL_SIZE) {
+    hallOfFame.push({ weights: new Float32Array(weights), score });
+    hallOfFame.sort((a, b) => b.score - a.score);
+  } else if (score > hallOfFame[hallOfFame.length - 1].score) {
+    hallOfFame[hallOfFame.length - 1] = { weights: new Float32Array(weights), score };
+    hallOfFame.sort((a, b) => b.score - a.score);
   }
 }
 
@@ -231,7 +260,7 @@ async function evaluatePopulation(population) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Single fight
+// Single fight (REBALANCED REWARDS)
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
@@ -276,12 +305,6 @@ async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
 
     console.log(`${tag} ${chalk.green('✓ Both bots connected')}`);
 
-    // Live hit printing (existing behavior)
-    botA.on('hitLanded', total => process.stdout.write(chalk.green(`${tag}${nameA}→HIT(${total}) `)));
-    botB.on('hitLanded', total => process.stdout.write(chalk.yellow(`${tag}${nameB}→HIT(${total}) `)));
-    botA.on('kicked', reason => console.log(`\n${tag} ${chalk.red(`${nameA} KICKED:`)} ${JSON.stringify(reason)}`));
-    botB.on('kicked', reason => console.log(`\n${tag} ${chalk.red(`${nameB} KICKED:`)} ${JSON.stringify(reason)}`));
-
     await sleep(500);
 
     // Setup: resistance + saturation + gear + tp
@@ -314,55 +337,90 @@ async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
     const fightStart = Date.now();
     console.log(`${tag} ${chalk.bold.yellow('⚔  FIGHT START')} (timeout: ${BOXING.HIT_TIMEOUT_MS}ms)`);
 
-    // ── Reward shaping ───────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════
+    // REWARD SHAPING (REBALANCED TO PREVENT SPIN/JUMP EXPLOITATION)
+    // ══════════════════════════════════════════════════════════════════════
+
     const SAMPLE_INTERVAL = 200;
 
-    // Proximity (existing)
-    const IDEAL_RANGE = 3.0;
-    const RANGE_SIGMA = 1.5;
-    const RANGE_BONUS = 0.6;
+    // PRIMARY REWARDS (what we actually want)
+    const R_HIT_LANDED = 50.0;          // MUCH higher - this is the goal
+    const P_HIT_TAKEN = 25.0;           // Significant penalty
 
-    // NEW: Movement penalties
-    const P_STATIONARY = 0.4;         // Penalty per sample for not moving
-    const MIN_MOVE_SPEED = 0.08;      // Below this = "stationary"
+    // ANTI-DEGENERATE PENALTIES
+    const P_CUMULATIVE_SPIN = 0.02;     // Per radian of total rotation
+    const P_JUMP_WHILE_FAR = 1.5;       // Jumping when opponent > 5 blocks away
+    const P_ATTACK_WHILE_NOT_FACING = 2.0; // Clicked but wasn't aiming
+    const P_STATIONARY = 0.8;           // Not moving horizontally
+    const P_EXTREME_PITCH = 1.0;        // Looking at sky/ground
 
-    // NEW: Orientation penalties  
-    const P_EXTREME_PITCH = 1.0;      // Penalty for looking too far up/down
-    const EXTREME_PITCH_THRESH = Math.PI * 0.30;  // ~54 degrees
+    // SHAPING (small guidance, not exploitable)
+    const R_AIM_AND_ATTACK = 3.0;       // Clicked WHILE crosshair on enemy
+    const R_APPROACH_WHEN_FAR = 0.1;    // Small reward for closing distance when far
+    const R_MAINTAIN_COMBAT_RANGE = 0.2; // In [2.5, 4.0] range
 
-    // NEW: Facing reward
-    const R_FACING_OPPONENT = 0.25;   // Reward for yaw pointing toward enemy
+    // THRESHOLDS
+    const COMBAT_RANGE_MIN = 2.5;
+    const COMBAT_RANGE_MAX = 4.0;
+    const FAR_THRESHOLD = 6.0;
+    const EXTREME_PITCH_THRESH = Math.PI * 0.3;
+    const MIN_MOVE_SPEED = 0.08;
 
-    // Existing combat rewards
-    const R_AIM_SAMPLE = 0.15;
-    const R_LEFT_CLICK = 0.05;
-    const R_HIT_LANDED = 12.0;
-    const P_HIT_TAKEN = 6.0;
-
-    let rangeA = 0, rangeB = 0;
     let shapedA = 0, shapedB = 0;
-    let pendingClickA = 0, pendingClickB = 0;
 
-    // Track previous positions for velocity calculation
+    // Track cumulative rotation (anti-spin)
+    let totalYawRotationA = 0, totalYawRotationB = 0;
+    let lastYawA = null, lastYawB = null;
+
+    // Track attack quality
+    let attacksWhileAimingA = 0, attacksWhileAimingB = 0;
+    let totalAttacksA = 0, totalAttacksB = 0;
+
+    // Track previous state for movement detection
     let prevPosA = null, prevPosB = null;
 
-    // Click shaping
-    botA.on('leftClick', () => { shapedA += R_LEFT_CLICK; pendingClickA++; });
-    botB.on('leftClick', () => { shapedB += R_LEFT_CLICK; pendingClickB++; });
+    // ─── Click handlers - track if we were aiming when we clicked ──────
+    botA.on('leftClick', () => {
+      totalAttacksA++;
+      const entA = botA.bot.entity;
+      const entB = botB.bot.entity;
+      if (entA && entB && crosshairOnEnemy(entA, entB)) {
+        attacksWhileAimingA++;
+        shapedA += R_AIM_AND_ATTACK;  // Reward: clicked while aiming!
+      } else {
+        shapedA -= P_ATTACK_WHILE_NOT_FACING;  // Penalty: wasted click
+      }
+    });
 
-    // Hit shaping
-    botA.on('hitLanded', () => {
+    botB.on('leftClick', () => {
+      totalAttacksB++;
+      const entA = botA.bot.entity;
+      const entB = botB.bot.entity;
+      if (entA && entB && crosshairOnEnemy(entB, entA)) {
+        attacksWhileAimingB++;
+        shapedB += R_AIM_AND_ATTACK;
+      } else {
+        shapedB -= P_ATTACK_WHILE_NOT_FACING;
+      }
+    });
+
+    // ─── Hit rewards (core combat) ──────────────────────────────────────
+    botA.on('hitLanded', (total) => {
       shapedA += R_HIT_LANDED;
-      if (pendingClickA > 0) { shapedA -= R_LEFT_CLICK; pendingClickA--; }
+      process.stdout.write(chalk.green(`${tag}${nameA}→HIT(${total}) `));
     });
-    botB.on('hitLanded', () => {
+    botB.on('hitLanded', (total) => {
       shapedB += R_HIT_LANDED;
-      if (pendingClickB > 0) { shapedB -= R_LEFT_CLICK; pendingClickB--; }
+      process.stdout.write(chalk.yellow(`${tag}${nameB}→HIT(${total}) `));
     });
-
     botA.on('hitTaken', () => { shapedA -= P_HIT_TAKEN; });
     botB.on('hitTaken', () => { shapedB -= P_HIT_TAKEN; });
 
+    // ─── Kicked handlers ────────────────────────────────────────────────
+    botA.on('kicked', reason => console.log(`\n${tag} ${chalk.red(`${nameA} KICKED:`)} ${JSON.stringify(reason)}`));
+    botB.on('kicked', reason => console.log(`\n${tag} ${chalk.red(`${nameB} KICKED:`)} ${JSON.stringify(reason)}`));
+
+    // ─── Proximity sampler (shaping rewards) ────────────────────────────
     const proximitySampler = setInterval(() => {
       try {
         const entA = botA.bot.entity;
@@ -371,70 +429,85 @@ async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
 
         const posA = entA.position;
         const posB = entB.position;
-
-        // ─── Distance & Range Gaussian ───────────────────────────────
         const dx = posA.x - posB.x;
-        const dy = posA.y - posB.y;
         const dz = posA.z - posB.z;
-        const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+        const dist = Math.sqrt(dx*dx + dz*dz);  // Horizontal distance
 
-        const gaussianRange = (d) =>
-          Math.exp(-0.5 * ((d - IDEAL_RANGE) / RANGE_SIGMA) ** 2);
+        // ─── CUMULATIVE SPIN PENALTY ─────────────────────────────────
+        // Track total yaw change - spinning racks up huge penalties
+        if (lastYawA !== null) {
+          const yawDelta = Math.abs(wrapPi(entA.yaw - lastYawA));
+          totalYawRotationA += yawDelta;
+        }
+        if (lastYawB !== null) {
+          const yawDelta = Math.abs(wrapPi(entB.yaw - lastYawB));
+          totalYawRotationB += yawDelta;
+        }
+        lastYawA = entA.yaw;
+        lastYawB = entB.yaw;
 
-        const bonus = RANGE_BONUS * gaussianRange(dist);
-        rangeA += bonus;
-        rangeB += bonus;
+        // ─── JUMPING WHILE FAR PENALTY ───────────────────────────────
+        // Jumping only makes sense in close combat
+        if (!entA.onGround && dist > FAR_THRESHOLD) {
+          shapedA -= P_JUMP_WHILE_FAR;
+        }
+        if (!entB.onGround && dist > FAR_THRESHOLD) {
+          shapedB -= P_JUMP_WHILE_FAR;
+        }
 
-        // ─── NEW: Movement Penalty (STANDING STILL / SPINNING) ───────
-        if (prevPosA) {
-          const moveA = Math.sqrt(
-            (posA.x - prevPosA.x) ** 2 + 
-            (posA.z - prevPosA.z) ** 2
+        // ─── COMBAT RANGE REWARD ─────────────────────────────────────
+        // Small reward for being in effective PvP range
+        if (dist >= COMBAT_RANGE_MIN && dist <= COMBAT_RANGE_MAX) {
+          shapedA += R_MAINTAIN_COMBAT_RANGE;
+          shapedB += R_MAINTAIN_COMBAT_RANGE;
+        }
+
+        // ─── APPROACH REWARD (only when far) ─────────────────────────
+        if (dist > FAR_THRESHOLD && prevPosA && prevPosB) {
+          const prevDistA = Math.sqrt(
+            (prevPosA.x - posB.x) ** 2 + (prevPosA.z - posB.z) ** 2
           );
-          if (moveA < MIN_MOVE_SPEED) {
-            shapedA -= P_STATIONARY;
-          }
+          const prevDistB = Math.sqrt(
+            (prevPosB.x - posA.x) ** 2 + (prevPosB.z - posA.z) ** 2
+          );
+          
+          // Only reward if actually closing distance significantly
+          if (dist < prevDistA - 0.1) shapedA += R_APPROACH_WHEN_FAR;
+          if (dist < prevDistB - 0.1) shapedB += R_APPROACH_WHEN_FAR;
+        }
+
+        // ─── STATIONARY PENALTY ──────────────────────────────────────
+        if (prevPosA) {
+          const moveA = Math.sqrt((posA.x - prevPosA.x)**2 + (posA.z - prevPosA.z)**2);
+          if (moveA < MIN_MOVE_SPEED) shapedA -= P_STATIONARY;
         }
         if (prevPosB) {
-          const moveB = Math.sqrt(
-            (posB.x - prevPosB.x) ** 2 + 
-            (posB.z - prevPosB.z) ** 2
-          );
-          if (moveB < MIN_MOVE_SPEED) {
-            shapedB -= P_STATIONARY;
-          }
+          const moveB = Math.sqrt((posB.x - prevPosB.x)**2 + (posB.z - prevPosB.z)**2);
+          if (moveB < MIN_MOVE_SPEED) shapedB -= P_STATIONARY;
         }
+
+        // ─── EXTREME PITCH PENALTY ───────────────────────────────────
+        if (Math.abs(entA.pitch) > EXTREME_PITCH_THRESH) shapedA -= P_EXTREME_PITCH;
+        if (Math.abs(entB.pitch) > EXTREME_PITCH_THRESH) shapedB -= P_EXTREME_PITCH;
+
         prevPosA = posA.clone();
         prevPosB = posB.clone();
-
-        // ─── NEW: Extreme Pitch Penalty (LOOKING AT SKY/GROUND) ──────
-        if (Math.abs(entA.pitch) > EXTREME_PITCH_THRESH) {
-          shapedA -= P_EXTREME_PITCH;
-        }
-        if (Math.abs(entB.pitch) > EXTREME_PITCH_THRESH) {
-          shapedB -= P_EXTREME_PITCH;
-        }
-
-        // ─── NEW: Facing Opponent Reward ─────────────────────────────
-        const angleToOppA = Math.atan2(-(posB.x - posA.x), posB.z - posA.z);
-        const angleToOppB = Math.atan2(-(posA.x - posB.x), posA.z - posB.z);
-        
-        const yawDiffA = Math.abs(wrapPi(entA.yaw - angleToOppA));
-        const yawDiffB = Math.abs(wrapPi(entB.yaw - angleToOppB));
-        
-        // Scale: 1.0 when perfectly facing, 0.0 when looking opposite direction
-        shapedA += R_FACING_OPPONENT * (1 - yawDiffA / Math.PI);
-        shapedB += R_FACING_OPPONENT * (1 - yawDiffB / Math.PI);
-
-        // ─── Aim reward (existing) ───────────────────────────────────
-        if (crosshairOnEnemy(entA, entB)) shapedA += R_AIM_SAMPLE;
-        if (crosshairOnEnemy(entB, entA)) shapedB += R_AIM_SAMPLE;
-
       } catch {}
     }, SAMPLE_INTERVAL);
-    await sleep(BOXING.HIT_TIMEOUT_MS);
 
+    // ─── Wait for fight to complete ──────────────────────────────────────
+    await sleep(BOXING.HIT_TIMEOUT_MS);
     clearInterval(proximitySampler);
+
+    // ─── Apply cumulative spin penalty ───────────────────────────────────
+    // This is the KEY anti-spin mechanism
+    // A full rotation = 2π radians (~6.28)
+    // Spinning constantly for 15s at 1 rev/sec = ~94 radians
+    // That would be 94 * 0.02 = 1.88 penalty
+    shapedA -= P_CUMULATIVE_SPIN * totalYawRotationA;
+    shapedB -= P_CUMULATIVE_SPIN * totalYawRotationB;
+
+    // ─── Stop fighting and calculate results ─────────────────────────────
     botA.stopFighting();
     botB.stopFighting();
 
@@ -443,29 +516,34 @@ async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
     const hitsA = botA.getHits().myHits;
     const hitsB = botB.getHits().myHits;
 
-    const scoreA = hitsA + rangeA + shapedA;
-    const scoreB = hitsB + rangeB + shapedB;
+    const scoreA = (hitsA * R_HIT_LANDED) + shapedA;
+    const scoreB = (hitsB * R_HIT_LANDED) + shapedB;
+
+    // Log attack efficiency for debugging
+    const effA = totalAttacksA > 0 ? (attacksWhileAimingA / totalAttacksA * 100).toFixed(0) : 0;
+    const effB = totalAttacksB > 0 ? (attacksWhileAimingB / totalAttacksB * 100).toFixed(0) : 0;
 
     let resultLine;
     if (hitsA > hitsB) resultLine = chalk.green(`WINNER: Agent ${idxA} (${nameA})`);
     else if (hitsB > hitsA) resultLine = chalk.green(`WINNER: Agent ${idxB} (${nameB})`);
     else resultLine = chalk.gray('DRAW');
 
-    const breakdown = (name, hits, range, shaped, total) =>
+    const breakdown = (name, hits, shaped, total, rot, eff) =>
       chalk.gray(
-        `${name}: ${hits}hits +${range.toFixed(1)}range +${shaped.toFixed(1)}shape = ${chalk.white(total.toFixed(1))}`
+        `${name}: ${hits}hits +${shaped.toFixed(1)}shape -${(P_CUMULATIVE_SPIN * rot).toFixed(1)}spin = ` +
+        chalk.white(total.toFixed(1)) + chalk.dim(` (aim:${eff}%, rot:${rot.toFixed(1)}rad)`)
       );
 
     console.log(
       `\n${tag} ${chalk.bold('⏹  FIGHT OVER')} (${elapsed}s) — ${resultLine}\n` +
-      `${tag}  ${breakdown(nameA, hitsA, rangeA, shapedA, scoreA)}\n` +
-      `${tag}  ${breakdown(nameB, hitsB, rangeB, shapedB, scoreB)}`
+      `${tag}  ${breakdown(nameA, hitsA, shapedA + (P_CUMULATIVE_SPIN * totalYawRotationA), scoreA, totalYawRotationA, effA)}\n` +
+      `${tag}  ${breakdown(nameB, hitsB, shapedB + (P_CUMULATIVE_SPIN * totalYawRotationB), scoreB, totalYawRotationB, effB)}`
     );
 
     log.step(
       FTAG,
-      `done — ${nameA}:${hitsA}hits+${rangeA.toFixed(1)}range+${shapedA.toFixed(1)}shape ` +
-      `${nameB}:${hitsB}hits+${rangeB.toFixed(1)}range+${shapedB.toFixed(1)}shape`
+      `done — ${nameA}:${hitsA}hits+${shapedA.toFixed(1)}shape-${(P_CUMULATIVE_SPIN*totalYawRotationA).toFixed(1)}spin=${scoreA.toFixed(1)} ` +
+      `${nameB}:${hitsB}hits+${shapedB.toFixed(1)}shape-${(P_CUMULATIVE_SPIN*totalYawRotationB).toFixed(1)}spin=${scoreB.toFixed(1)}`
     );
 
     return { score: scoreA, oppScore: scoreB };
@@ -480,7 +558,9 @@ async function runFight(server, weightsA, weightsB, idxA, idxB, arenaId = 0) {
   }
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function connectBotWithRetry(opts, maxRetries = 3) {
   const TAG = `CONNECT:${opts.username}`;
@@ -495,7 +575,7 @@ async function connectBotWithRetry(opts, maxRetries = 3) {
         err.message.includes('timeout') ||
         err.message.includes('Timed out');
       if (attempt < maxRetries && retryable) {
-        await sleep(1000 * attempt);  // 1s, 2s — faster than 3s×attempt
+        await sleep(1000 * attempt);
       } else {
         throw err;
       }
@@ -503,35 +583,50 @@ async function connectBotWithRetry(opts, maxRetries = 3) {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Genetic Algorithm (IMPROVED DIVERSITY)
+// ─────────────────────────────────────────────────────────────────────────────
+
 function evolve(ranked, generation) {
   const newPop = [];
   
-  // ─── Adaptive Mutation ─────────────────────────────────────────
-  // Start aggressive, decay over time to fine-tune
+  // ─── Adaptive Mutation (starts high, decays over time) ─────────
   const baseMutRate = TRAINING.MUTATION_RATE || 0.15;
   const baseMutStr = TRAINING.MUTATION_STRENGTH || 0.5;
   
   const decay = Math.pow(0.997, generation);
-  const mutRate = Math.max(0.08, baseMutRate * (0.5 + 0.5 * decay));
-  const mutStrength = baseMutStr * (0.6 + 0.4 * decay);
+  const mutRate = Math.max(0.08, baseMutRate * (0.6 + 0.4 * decay));
+  const mutStrength = Math.max(0.2, baseMutStr * (0.5 + 0.5 * decay));
   
   console.log(chalk.gray(`  Mutation: rate=${(mutRate*100).toFixed(1)}% strength=${mutStrength.toFixed(2)}`));
 
-  // ─── Elitism: Keep top 2 unchanged ─────────────────────────────
-  newPop.push(new Float32Array(ranked[0].weights));
-  newPop.push(new Float32Array(ranked[1].weights));
+  // ─── Elitism: Keep top 3 unchanged ─────────────────────────────
+  for (let i = 0; i < Math.min(3, ranked.length); i++) {
+    newPop.push(new Float32Array(ranked[i].weights));
+  }
+
+  // ─── Diversity Injection: 10% random individuals ───────────────
+  // This prevents population collapse into local optima
+  const numRandom = Math.floor(TRAINING.POP_SIZE * 0.10);
+  for (let i = 0; i < numRandom; i++) {
+    newPop.push(nn.randomWeights());
+  }
+
+  // ─── Hall of Fame: Keep historical champions ───────────────────
+  if (hallOfFame.length > 0 && Math.random() < 0.1) {
+    const historic = hallOfFame[Math.floor(Math.random() * hallOfFame.length)];
+    newPop.push(new Float32Array(historic.weights));
+  }
 
   // ─── Tournament Selection + Crossover ──────────────────────────
   while (newPop.length < TRAINING.POP_SIZE) {
-    const parent1 = tournamentSelect(ranked, 4);
-    const parent2 = tournamentSelect(ranked, 4);
+    const parent1 = tournamentSelect(ranked, 3);
+    const parent2 = tournamentSelectDiverse(ranked, 3, parent1);
     
     let child;
-    if (Math.random() < 0.7 && parent1 !== parent2) {
-      // Crossover
-      child = crossover(parent1.weights, parent2.weights);
+    if (Math.random() < 0.75 && parent1 !== parent2) {
+      child = uniformCrossover(parent1.weights, parent2.weights);
     } else {
-      // Clone one parent
       child = new Float32Array(parent1.weights);
     }
     
@@ -552,16 +647,25 @@ function tournamentSelect(ranked, k) {
   return best;
 }
 
-function crossover(w1, w2) {
+// Diverse tournament: pick someone different from parent1
+function tournamentSelectDiverse(ranked, k, avoid) {
+  let best = null;
+  for (let i = 0; i < k * 2; i++) {  // Try more candidates
+    const idx = Math.floor(Math.random() * ranked.length);
+    const candidate = ranked[idx];
+    if (candidate === avoid) continue;
+    if (!best || candidate.score > best.score) {
+      best = candidate;
+    }
+  }
+  return best || ranked[Math.floor(Math.random() * ranked.length)];
+}
+
+// Uniform crossover: each gene picked randomly from either parent
+function uniformCrossover(w1, w2) {
   const child = new Float32Array(w1.length);
-  // Two-point crossover
-  const p1 = Math.floor(Math.random() * w1.length);
-  const p2 = Math.floor(Math.random() * w1.length);
-  const lo = Math.min(p1, p2);
-  const hi = Math.max(p1, p2);
-  
   for (let i = 0; i < w1.length; i++) {
-    child[i] = (i >= lo && i < hi) ? w2[i] : w1[i];
+    child[i] = Math.random() < 0.5 ? w1[i] : w2[i];
   }
   return child;
 }
@@ -570,7 +674,7 @@ function mutate(weights, rate, strength) {
   const child = new Float32Array(weights);
   for (let i = 0; i < child.length; i++) {
     if (Math.random() < rate) {
-      // Gaussian-ish noise
+      // Gaussian-ish noise (sum of uniforms approximates normal)
       const noise = (Math.random() + Math.random() + Math.random() - 1.5) * strength;
       child[i] += noise;
       child[i] = Math.max(-3, Math.min(3, child[i])); // Soft clamp
@@ -579,37 +683,81 @@ function mutate(weights, rate, strength) {
   return child;
 }
 
-async function saveChampion(gen, weights, bestScore) {
+// ─────────────────────────────────────────────────────────────────────────────
+// Persistence
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function savePopulation(gen, ranked, bestScore) {
   await fs.ensureDir(cfg.TRAINING.WEIGHTS_DIR);
+  
+  // Always save full population as "latest.json" (overwritten each gen)
+  await fs.writeJSON(
+    path.join(cfg.TRAINING.WEIGHTS_DIR, 'latest.json'),
+    { 
+      generation: gen, 
+      bestScore, 
+      population: ranked.map(r => nn.toJSON(r.weights)),
+      hallOfFame: hallOfFame.map(h => nn.toJSON(h.weights)),
+    },
+    { spaces: 0 },
+  );
+  
+  // Save champion separately
   await fs.writeJSON(
     path.join(cfg.TRAINING.WEIGHTS_DIR, 'champion.json'),
-    { generation: gen, score: bestScore, weights: nn.toJSON(weights) },
-    { spaces: 0 },  // compact JSON — faster write
+    { generation: gen, score: bestScore, weights: nn.toJSON(ranked[0].weights) },
+    { spaces: 0 },
   );
 }
 
 async function saveGeneration(gen, ranked, bestScore) {
   await fs.ensureDir(cfg.TRAINING.WEIGHTS_DIR);
-  // Compact JSON (spaces:0) — full population can be ~1MB, no need for pretty-print
+  
+  // Snapshot at milestone generations
   await fs.writeJSON(
     path.join(cfg.TRAINING.WEIGHTS_DIR, `gen_${gen}.json`),
-    { generation: gen, bestScore, population: ranked.map(r => nn.toJSON(r.weights)) },
+    { 
+      generation: gen, 
+      bestScore, 
+      population: ranked.map(r => nn.toJSON(r.weights)),
+      hallOfFame: hallOfFame.map(h => nn.toJSON(h.weights)),
+    },
     { spaces: 0 },
   );
-  await saveChampion(gen, ranked[0].weights, bestScore);
-  console.log(chalk.gray(`  Saved generation ${gen} → ${cfg.TRAINING.WEIGHTS_DIR}`));
+  
+  // Always save latest too
+  await savePopulation(gen, ranked, bestScore);
+  
+  console.log(chalk.gray(`  💾 Full generation snapshot saved → gen_${gen}.json`));
 }
 
 async function findLatestWeights() {
   const dir = cfg.TRAINING.WEIGHTS_DIR;
   if (!await fs.pathExists(dir)) return null;
+  
+  // First try latest.json (saved every generation)
+  const latestPath = path.join(dir, 'latest.json');
+  if (await fs.pathExists(latestPath)) {
+    return latestPath;
+  }
+  
+  // Fall back to most recent gen_N.json
   const files = (await fs.readdir(dir))
     .filter(f => f.startsWith('gen_') && f.endsWith('.json'))
-    .sort((a, b) => parseInt(b.match(/\d+/)[0]) - parseInt(a.match(/\d+/)[0]));
-  return files.length > 0 ? path.join(dir, files[0]) : null;
+    .sort((a, b) => {
+      const numA = parseInt(a.match(/\d+/)?.[0] || '0');
+      const numB = parseInt(b.match(/\d+/)?.[0] || '0');
+      return numB - numA;
+    });
+  
+  if (files.length > 0) {
+    return path.join(dir, files[0]);
+  }
+  
+  return null;
 }
 
-// ── Shutdown ───────────────────────────────────────────────────────────────
+// ─── Shutdown ───────────────────────────────────────────────────────────────
 
 async function shutdown() {
   console.log(chalk.yellow('\n\nShutting down...'));

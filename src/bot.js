@@ -32,7 +32,7 @@ function wrapPi(a) {
 }
 function degToRad(d) { return (d * Math.PI) / 180; }
 
-function buildInputs(selfBot, oppEntity, zoneOriginX, myHits, oppHits) {
+function buildInputs(selfBot, oppEntity, zoneOriginX, myHits, oppHits, ticksSinceAttack) {
   const sp = selfBot.entity.position;
   const sv = selfBot.entity.velocity;
 
@@ -52,17 +52,29 @@ function buildInputs(selfBot, oppEntity, zoneOriginX, myHits, oppHits) {
   const relVX = clamp1((opVel.x - sv.x) / 5);
   const relVZ = clamp1((opVel.z - sv.z) / 5);
 
-  // ─── NEW: Angle to opponent relative to where we're looking ────
+  // ─── Angle to opponent relative to where we're looking ────
   const angleToOpp = Math.atan2(-relX, relZ); // Minecraft yaw convention
   const yawDiff = wrapPi(selfBot.entity.yaw - angleToOpp);
   const facingOpp = clamp1(yawDiff / Math.PI); // -1 = opp on left, +1 = opp on right, 0 = facing them
 
-  // ─── NEW: Pitch relative to opponent (are they above/below?) ───
+  // ─── Pitch relative to opponent (are they above/below?) ───
   const vertAngleToOpp = Math.atan2(relY, Math.sqrt(relX*relX + relZ*relZ));
   const pitchDiff = clamp1((selfBot.entity.pitch - vertAngleToOpp) / (Math.PI / 2));
 
-  // ─── NEW: Current pitch (to help avoid looking at sky) ─────────
+  // ─── Current pitch (to help avoid looking at sky) ─────────
   const currentPitch = clamp1(selfBot.entity.pitch / (Math.PI / 2));
+
+  // ─── NEW: Attack cooldown state ────────────────────────────────
+  // MC 1.8 has ~0.5s attack cooldown for full damage
+  // ticksSinceAttack in range [0, 20] for 20 ticks = 1 second
+  const attackReady = clamp1((ticksSinceAttack - 10) / 10);  // -1 = just attacked, +1 = ready
+
+  // ─── NEW: In attack range? ─────────────────────────────────────
+  const inRange = (dist < 4.0) ? 1 : -1;
+
+  // ─── NEW: Opponent velocity relative to us (approaching?) ──────
+  const approachSpeed = -(relVX * dirX + relVZ * dirZ);  // Dot product
+  const approachNorm = clamp1(approachSpeed / 0.3);
 
   return [
     // Self state (0-5)
@@ -85,16 +97,20 @@ function buildInputs(selfBot, oppEntity, zoneOriginX, myHits, oppHits) {
     norm(myHits, 0, BOXING.HITS_TO_WIN),
     norm(oppHits, 0, BOXING.HITS_TO_WIN),
 
-    // NEW: Aiming state (14-16)
+    // Aiming state (14-16)
     facingOpp,      // How far off our yaw is from facing opponent
     pitchDiff,      // How far off our pitch is from opponent's height
     currentPitch,   // Raw pitch (penalize extremes)
+
+    // NEW: Attack timing state (17-19)
+    attackReady,    // Can we attack now?
+    inRange,        // Are we in attack range?
+    approachNorm,   // Is opponent approaching or fleeing?
   ];
 }
 
 function cfg_zone_spacing_half() {
   // Arena spacing is 60 blocks between centres, so 30 blocks is the safe radius.
-  // Used to filter nearestEntity to only find opponents in the same arena.
   return 25;
 }
 
@@ -163,6 +179,7 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
     let myHits = 0;
     let oppHits = 0;
     let lastAttackTime = 0;
+    let ticksSinceAttack = 20;  // Start ready to attack
     let isDisconnected = false;
 
     // NEW: for "no autoclick" (click must be spam-toggled)
@@ -179,7 +196,7 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
     };
     bot.on('error', errorHandler);
 
-    // Attach minecraft-protocol socket listeners (same as before) [8]
+    // Attach minecraft-protocol socket listeners
     setImmediate(() => {
       try {
         if (bot._client) {
@@ -249,6 +266,9 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
       if (!fighting || isDisconnected) return;
       if (!bot.entity) return;
 
+      // Increment attack cooldown counter
+      ticksSinceAttack = Math.min(ticksSinceAttack + 1, 20);
+
       let oppEntity;
       try {
         oppEntity = bot.nearestEntity(e =>
@@ -260,7 +280,7 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
         return;
       }
 
-      const inputs = buildInputs(bot, oppEntity, zoneOriginX, myHits, oppHits);
+      const inputs = buildInputs(bot, oppEntity, zoneOriginX, myHits, oppHits, ticksSinceAttack);
       const a = weights ? nn.decide(weights, inputs) : randomActionsObj();
 
       withPing(ping, () => {
@@ -304,7 +324,7 @@ function createBot({ host, port, username, weights, zoneOriginX = 0 }) {
                 if (!fighting || isDisconnected) return;
                 try {
                   lastAttackTime = Date.now() + ping;
-                  // IMPORTANT: no bot.lookAt() here (removed auto-aim) [8]
+                  ticksSinceAttack = 0;  // Reset attack cooldown counter
                   bot.attack(oppEntity);
                 } catch {}
               });

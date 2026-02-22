@@ -77,12 +77,12 @@ module.exports = {
     FLOOR_Y: 102,
   },
 
-  // ── Boxing match rules ─────────────────────────────────────────────────────
+  // ─── Boxing Rules ────────────────────────────────────────────────────────
   BOXING: {
-    HITS_TO_WIN: 100,
-    HIT_TIMEOUT_MS: 8000,   // 8s — more signal per fight with approach reward
+    HITS_TO_WIN: 8,
+    HIT_TIMEOUT_MS: 15000,
     HEAL_ON_HIT: true,
-    HEAL_DELAY_MS: 50,
+    HEAL_DELAY_MS: 100,
   },
 
   // ── Ping simulation ────────────────────────────────────────────────────────
@@ -104,8 +104,8 @@ module.exports = {
     POP_SIZE: 64,                    // must = ACTIVE_ARENAS * 2
     FIGHTS_PER_AGENT: 1,
     TOP_FRACTION: 0.25,              // stronger selection pressure = faster convergence
-    MUTATION_RATE: 0.25,             // more exploration from fresh start
-    MUTATION_STRENGTH: 1.0,
+    MUTATION_RATE: 0.15,             // more exploration from fresh start
+    MUTATION_STRENGTH: 0.5,
   
     // NEW: Adaptive mutation (we'll use these in train.js)
     MUTATION_DECAY: 0.995,      // Slowly reduce mutation over generations
@@ -114,15 +114,15 @@ module.exports = {
     // NEW: Diversity pressure
     TOP_FRACTION: 0.2,          // Keep top 20% as parents (was maybe higher)
     TOURNAMENT_SIZE: 4,         // For tournament selection
-    SAVE_EVERY_N_GENS: 10,           // full population snapshot every 10 gens
+    SAVE_EVERY_N_GENS: 3,           // full population snapshot every 10 gens
     WEIGHTS_DIR: resolveWeightsDir(),
   },
 
   // ── Neural network ─────────────────────────────────────────────────────────
   NN: {
-    INPUTS: 17,
-    HIDDEN1: 24,
-    HIDDEN2: 16,
+    INPUTS: 20,
+    HIDDEN1: 32,
+    HIDDEN2: 24,
     OUTPUTS: 9,   // fwd, back, left, right, jump, attack, sprint
     DECISION_HZ: 20,  // 20 decisions/sec — richer signal per fight
   },
