@@ -24,30 +24,15 @@ module.exports = {
   RCON_PASSWORD: 'pvptrainer',
 
   JAVA_FLAGS: [
-    '-Xmx6G', '-Xms6G',
+    '-Xmx1400M', '-Xms1400M',
     '-XX:+UseG1GC',
     '-XX:+ParallelRefProcEnabled',
-    '-XX:MaxGCPauseMillis=200',
+    '-XX:MaxGCPauseMillis=50',
     '-XX:+UnlockExperimentalVMOptions',
     '-XX:+DisableExplicitGC',
     '-XX:+AlwaysPreTouch',
-    '-XX:G1NewSizePercent=30',
-    '-XX:G1MaxNewSizePercent=40',
-    '-XX:G1HeapRegionSize=8M',
-    '-XX:G1ReservePercent=20',
-    '-XX:G1HeapWastePercent=5',
-    '-XX:G1MixedGCCountTarget=4',
-    '-XX:InitiatingHeapOccupancyPercent=15',
-    '-XX:G1MixedGCLiveThresholdPercent=90',
-    '-XX:G1RSetUpdatingPauseTimePercent=5',
-    '-XX:SurvivorRatio=32',
-    '-XX:+PerfDisableSharedMem',
-    '-XX:MaxTenuringThreshold=1',
-    // Use ALL available CPU cores for GC (0 = auto-detect)
-    '-XX:ParallelGCThreads=8',
-    '-XX:ConcGCThreads=0',
-    '-Dio.netty.transport.noNative=true', // Force NIO, avoid epoll crash
-    '-Dusing.aikars.flags=true',
+    '-XX:G1HeapRegionSize=4M',
+    '-Dfile.encoding=UTF-8',
     '-jar',
   ],
 
@@ -79,8 +64,8 @@ module.exports = {
 
   // ─── Boxing Rules ────────────────────────────────────────────────────────
   BOXING: {
-    HITS_TO_WIN: 8,
-    HIT_TIMEOUT_MS: 15000,
+    HITS_TO_WIN: 5,
+    HIT_TIMEOUT_MS: 8000,
     HEAL_ON_HIT: true,
     HEAL_DELAY_MS: 100,
   },
@@ -98,10 +83,10 @@ module.exports = {
   // Each arena = 2 bots. Tune down if server runs out of memory or kicks bots.
   // POP_SIZE must equal ACTIVE_ARENAS * 2.
   TRAINING: {
-    PARALLEL_INSTANCES: 1,
+    PARALLEL_INSTANCES: 4,
     PORT_STRIDE: 10,
-    ACTIVE_ARENAS: 32,               // 32 arenas × 2 bots = 64 bots at once
-    POP_SIZE: 64,                    // must = ACTIVE_ARENAS * 2
+    ACTIVE_ARENAS: 8,               // 32 arenas × 2 bots = 64 bots at once
+    POP_SIZE: 32,                    // must = ACTIVE_ARENAS * 2
     FIGHTS_PER_AGENT: 1,
     TOP_FRACTION: 0.25,              // stronger selection pressure = faster convergence
     MUTATION_RATE: 0.15,             // more exploration from fresh start

@@ -255,8 +255,10 @@ messages:
   restart: Server restarting
 world-settings:
   default:
+    hopper-transfer: 1
+    hopper-check: 1
     verbose: false
-    mob-spawn-range: 4
+    mob-spawn-range: 0
     anti-xray:
       enabled: false
     entity-activation-range:
